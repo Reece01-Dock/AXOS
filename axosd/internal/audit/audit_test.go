@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -97,5 +99,46 @@ func TestLog_PreservesExplicitTimestamp(t *testing.T) {
 	}
 	if !e.Timestamp.Equal(explicit) {
 		t.Fatalf("Timestamp = %v, want %v (should not be overwritten)", e.Timestamp, explicit)
+	}
+}
+
+// Audit entries can contain command text and output verbatim (see
+// system.shell_exec) which may include secrets, so the log file must never
+// be group- or world-readable. This guards against that regressing silently.
+func TestOpen_FileIsOwnerOnly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.jsonl")
+
+	l, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer l.Close()
+
+	assertOwnerOnly(t, path)
+}
+
+func TestOpen_TightensPreExistingLoosePermissions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.jsonl")
+	if err := os.WriteFile(path, nil, 0644); err != nil {
+		t.Fatalf("seeding pre-existing file: %v", err)
+	}
+
+	l, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer l.Close()
+
+	assertOwnerOnly(t, path)
+}
+
+func assertOwnerOnly(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0600 {
+		t.Fatalf("%s has mode %o, want 0600 (owner-only — this file can contain secrets)", path, got)
 	}
 }

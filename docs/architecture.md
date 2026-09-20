@@ -70,7 +70,9 @@ internal/audit/       append-only JSONL audit log
 an AI client over SSH (`ssh router /path/axosd mcp`), which gives us
 authentication and encryption for free via SSH keys. A network transport
 (HTTP/SSE on the LAN with token auth) comes later; stdio-over-SSH is the
-security-conservative default.
+security-conservative default. See `docs/security.md` ("MCP transport &
+access control") for why this makes SSH key management the actual security
+perimeter of the whole platform, not an incidental detail.
 
 ## RouterBackend interface (v0, Milestone 2 scope)
 

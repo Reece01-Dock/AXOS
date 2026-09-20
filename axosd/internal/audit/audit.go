@@ -41,10 +41,22 @@ func New(w io.Writer) *Logger {
 
 // Open opens (creating if needed) an append-only log file at path and
 // returns a Logger writing to it. Call Close when done.
+//
+// The file is created owner-read/write only (0600): audit entries can
+// contain sensitive data (system.shell_exec logs the full command and its
+// output verbatim — see docs/security.md "Audit log confidentiality"), so
+// this file must not be group- or world-readable.
 func Open(path string) (*Logger, error) {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0640)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("audit: open %s: %w", path, err)
+	}
+	// The mode passed to OpenFile only applies when the file is newly
+	// created; enforce it unconditionally in case the file already existed
+	// with looser permissions (e.g. left over from an earlier axosd version).
+	if err := f.Chmod(0600); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("audit: restricting permissions on %s: %w", path, err)
 	}
 	l := New(f)
 	l.closer = f

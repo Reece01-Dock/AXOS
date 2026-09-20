@@ -580,10 +580,22 @@ func (b *Backend) ShellExec(ctx context.Context, command string, timeoutSeconds 
 // rollback engine (it restores via `nvram set`+`commit`, not via the web
 // UI's restore path); it should NOT be assumed interchangeable with a
 // web-UI-exported settings file without further verification.
+//
+// SECURITY: `nvram show` includes secrets in plaintext — the Wi-Fi
+// passphrases, the admin panel password, and (once VPN support lands) VPN
+// private keys. This backup is filesystem-permission-protected (owner-only,
+// enforced below even if the path/dir already existed with looser
+// permissions) but is NOT encrypted at rest. See docs/security.md
+// "Secrets at rest" for the accepted-risk rationale and the encryption
+// follow-up tracked there — do not widen these permissions to "fix" a
+// restore-tooling convenience issue without reading that section first.
 
 func (b *Backend) Backup(ctx context.Context, reason string) (backend.BackupInfo, error) {
-	if err := os.MkdirAll(b.BackupDir, 0750); err != nil {
+	if err := os.MkdirAll(b.BackupDir, 0700); err != nil {
 		return backend.BackupInfo{}, fmt.Errorf("asuswrt: creating backup dir %s: %w", b.BackupDir, err)
+	}
+	if err := os.Chmod(b.BackupDir, 0700); err != nil {
+		return backend.BackupInfo{}, fmt.Errorf("asuswrt: restricting permissions on %s: %w", b.BackupDir, err)
 	}
 
 	out, err := b.run(ctx, 15*time.Second, "nvram", "show")
@@ -593,7 +605,7 @@ func (b *Backend) Backup(ctx context.Context, reason string) (backend.BackupInfo
 
 	id := fmt.Sprintf("backup-%s", time.Now().UTC().Format("20060102-150405"))
 	path := filepath.Join(b.BackupDir, id+".nvram.txt")
-	if err := os.WriteFile(path, []byte(out), 0640); err != nil {
+	if err := writeOwnerOnlyFile(path, []byte(out)); err != nil {
 		return backend.BackupInfo{}, fmt.Errorf("asuswrt: writing backup %s: %w", path, err)
 	}
 
@@ -609,11 +621,21 @@ func (b *Backend) Backup(ctx context.Context, reason string) (backend.BackupInfo
 
 	metaPath := filepath.Join(b.BackupDir, id+".meta.json")
 	metaBytes, _ := json.MarshalIndent(info, "", "  ")
-	if err := os.WriteFile(metaPath, metaBytes, 0640); err != nil {
+	if err := writeOwnerOnlyFile(metaPath, metaBytes); err != nil {
 		return info, fmt.Errorf("asuswrt: writing backup metadata %s: %w", metaPath, err)
 	}
 
 	return info, nil
+}
+
+// writeOwnerOnlyFile writes data to path and enforces 0600 permissions even
+// if the file already existed with looser permissions (os.WriteFile's mode
+// argument only takes effect when the file is newly created).
+func writeOwnerOnlyFile(path string, data []byte) error {
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0600)
 }
 
 func (b *Backend) Restore(ctx context.Context, backupID string) error {

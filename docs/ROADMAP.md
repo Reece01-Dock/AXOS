@@ -49,6 +49,14 @@ Checkboxes refer to verification **on the router**.
 - [ ] Rollback engine: `rollback.arm(seconds)` / `rollback.confirm()` with
       automatic restore on timeout *(implemented + unit-tested in `axosd/`)*
 - [ ] All of the above exposed over MCP and driven end-to-end from an AI client
+- [ ] Audit log and backup files/dirs are owner-only (0600/0700), enforced on
+      every write, not just at creation *(implemented + unit-tested in
+      `axosd/`; see `docs/security.md` "Secrets at rest")*
+- [ ] Backup restore refuses a checksum-mismatched (tampered/corrupted)
+      backup *(implemented + unit-tested in `axosd/`)*
+- [ ] SSH password auth disabled on the router, key-only access confirmed
+      (`docs/security.md` "MCP transport & access control" — this is the
+      actual authentication perimeter for the whole platform)
 
 ## Milestone 3 — VPN, routing, firewall, DNS, QoS
 
@@ -64,6 +72,8 @@ Checkboxes refer to verification **on the router**.
 - [ ] QoS inspection and control
 - [ ] Diagnostics: ping/traceroute/DNS lookup/port check from the router
 - [ ] Performance testing: iperf3 server/client, WAN speed test, loaded latency
+- [ ] Dedicated VPN secrets store, separate from general config backups
+      (`docs/security.md` "Secrets at rest")
 
 ## Milestone 4 — Optimisation loops
 
@@ -79,8 +89,13 @@ KEEP OR REVERT → CONTINUE. No unbenchmarked "tuning".
 
 ## Later / continuous
 
-- [ ] Custom AXOS web UI sections (same backend as MCP — never a second control system)
+- [ ] Custom AXOS web UI sections (same backend as MCP — never a second control system;
+      security requirements checklist in `docs/security.md` "Future: web UI security requirements")
 - [ ] Package/module system for optional functionality
 - [ ] Historical metrics on USB storage (never internal flash)
+- [ ] Backup encryption at rest, once a key-management approach is decided
+      (`docs/security.md` "Secrets at rest")
+- [ ] Firmware image signing / verified `system.update` before flashing
+      anything AI-selected (`docs/security.md` "Firmware & build integrity")
 - [ ] Firmware-integrated axosd (built into the image rather than USB-installed)
 - [ ] `OpenWrtBackend` / other router support via the `RouterBackend` interface

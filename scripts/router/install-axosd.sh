@@ -24,6 +24,12 @@ if [ ! -d "$USB_ROOT" ]; then
 fi
 
 mkdir -p "$AXOS_DIR/backups" "$AXOS_DIR/logs"
+# Backups contain plaintext secrets (Wi-Fi passphrase, admin password, later
+# VPN keys) and the audit log records full shell_exec commands/output —
+# both must be owner-only. axosd enforces this itself on every write too
+# (docs/security.md "Secrets at rest"), but set it here as well so the
+# directories are never briefly world-readable between creation and first use.
+chmod 700 "$AXOS_DIR" "$AXOS_DIR/backups" "$AXOS_DIR/logs"
 
 echo "==> Installing axosd to $BIN_DEST"
 cp "$BIN_SRC" "$BIN_DEST"

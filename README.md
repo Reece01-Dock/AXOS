@@ -13,7 +13,7 @@ connectivity.
 
 | Path | Purpose |
 |---|---|
-| `docs/` | Roadmap, architecture, build guide, flashing & recovery, MCP API, safety design |
+| `docs/` | Roadmap, architecture, build guide, flashing & recovery, MCP API, safety design, security model |
 | `firmware/` | Reproducible Merlin build environment (Docker), source fetch + build scripts, patches |
 | `axosd/` | AXOS core service daemon (Go): shared router API, MCP server, rollback engine, audit log |
 | `scripts/router/` | Helpers that run on the router itself (install, service hooks) |
@@ -74,6 +74,12 @@ is the source of truth for what is actually verified vs. merely written.
    snapshot → arm rollback → apply → health-check → confirm-or-revert.
 6. **No fake functionality.** A feature is either implemented and verified, or
    documented as not done. Docs mark hardware-unverified code explicitly.
+7. **The security boundary is "who can reach `axosd`," not "what the AI is
+   allowed to do."** The AI has full root by design — see
+   [`docs/security.md`](docs/security.md) for the threat model this implies,
+   what's actually protected today (owner-only permissions on every
+   secret-bearing file, checksum-verified restores), and what's explicitly
+   still a gap (encryption at rest, network-transport auth).
 
 ## Licensing note
 
