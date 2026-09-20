@@ -1,0 +1,17 @@
+# Firmware build tree (multi-GB, mostly upstream — see firmware/patches/README.md)
+/firmware/src/
+/firmware/out/
+/firmware/.sources-pinned
+
+# Go
+/axosd/bin/
+*.test
+/axosd/**/*.out
+
+# Device-specific captured facts that may be sensitive (serials, keys) unless
+# explicitly reviewed and intentionally committed.
+/docs/device-facts/*.local.*
+
+# Editors / OS
+.DS_Store
+*.swp
