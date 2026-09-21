@@ -123,6 +123,28 @@ func (b *Backend) nvramGet(ctx context.Context, key string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
+// parseNvramShow parses `nvram show` output ("key=value" per line, with a
+// trailing "size: N bytes (...)" summary line and possibly blank lines) into
+// a key/value map. Shared by NVRAMDump and Restore so there is exactly one
+// place that understands this format.
+func parseNvramShow(raw string) map[string]string {
+	out := make(map[string]string)
+	sc := bufio.NewScanner(strings.NewReader(raw))
+	for sc.Scan() {
+		line := sc.Text()
+		if line == "" || !strings.Contains(line, "=") {
+			continue
+		}
+		kv := strings.SplitN(line, "=", 2)
+		key := strings.TrimSpace(kv[0])
+		if key == "" || strings.Contains(key, " ") {
+			continue // skip summary/non-kv lines like "size: 12345 bytes (...)"
+		}
+		out[key] = kv[1]
+	}
+	return out
+}
+
 // --- SystemInfo --------------------------------------------------------
 
 func (b *Backend) Info(ctx context.Context) (backend.SystemInfo, error) {
@@ -658,23 +680,11 @@ func (b *Backend) Restore(ctx context.Context, backupID string) error {
 		return fmt.Errorf("asuswrt: backup %s failed checksum verification — refusing to restore a corrupt snapshot", backupID)
 	}
 
-	// nvram show output is "key=value" per line, with a trailing "size: N
-	// bytes" summary line to skip. Restoring by replaying `nvram set` for
-	// every key is deliberately conservative (no bulk-import shortcut) so a
-	// malformed line fails loudly instead of corrupting nvram state.
-	sc := bufio.NewScanner(strings.NewReader(string(data)))
+	// Restoring by replaying `nvram set` for every key is deliberately
+	// conservative (no bulk-import shortcut) so a malformed line fails
+	// loudly instead of corrupting nvram state.
 	applied := 0
-	for sc.Scan() {
-		line := sc.Text()
-		if line == "" || !strings.Contains(line, "=") {
-			continue
-		}
-		kv := strings.SplitN(line, "=", 2)
-		key := strings.TrimSpace(kv[0])
-		if key == "" || strings.Contains(key, " ") {
-			continue // skip summary/non-kv lines like "size: 12345 bytes (...)"
-		}
-		val := kv[1]
+	for key, val := range parseNvramShow(string(data)) {
 		if _, err := b.run(ctx, 5*time.Second, "nvram", "set", key+"="+val); err != nil {
 			return fmt.Errorf("asuswrt: restoring nvram key %q: %w (applied %d keys before failure)", key, err, applied)
 		}
@@ -719,6 +729,197 @@ func (b *Backend) ListBackups(ctx context.Context) ([]backend.BackupInfo, error)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
 	return out, nil
+}
+
+// --- NVRAMDump -------------------------------------------------------------
+
+func (b *Backend) NVRAMDump(ctx context.Context) (map[string]string, error) {
+	out, err := b.run(ctx, 15*time.Second, "nvram", "show")
+	if err != nil {
+		return nil, fmt.Errorf("asuswrt: nvram show: %w", err)
+	}
+	return parseNvramShow(out), nil
+}
+
+// --- Services ----------------------------------------------------------
+
+// knownServices maps a friendly service name to the process name(s) we
+// expect to see in `ps` output if it's running. (verify) against real `ps`
+// output on this firmware — process names/args can differ by build, and
+// this is a best-effort presence check, not a query of Merlin's actual
+// service-manager state (rc doesn't expose one directly).
+var knownServices = map[string][]string{
+	"dnsmasq":   {"dnsmasq"},
+	"httpd":     {"httpd"},
+	"wireguard": {"wg", "wireguard"},
+	"openvpn":   {"openvpn"},
+}
+
+func (b *Backend) Services(ctx context.Context) ([]backend.ServiceStatus, error) {
+	out, err := b.run(ctx, 5*time.Second, "ps", "w")
+	if err != nil {
+		return nil, fmt.Errorf("asuswrt: ps: %w", err)
+	}
+
+	names := make([]string, 0, len(knownServices))
+	for name := range knownServices {
+		names = append(names, name)
+	}
+	sort.Strings(names) // deterministic output order
+
+	statuses := make([]backend.ServiceStatus, 0, len(names))
+	for _, name := range names {
+		s := backend.ServiceStatus{Name: name}
+		for _, procName := range knownServices[name] {
+			if pid, ok := findPID(out, procName); ok {
+				s.Running = true
+				s.PID = pid
+				break
+			}
+		}
+		statuses = append(statuses, s)
+	}
+	return statuses, nil
+}
+
+// findPID does a best-effort scan of `ps w`-style output (BusyBox ps: "PID
+// ... COMMAND") for a line whose command contains procName, returning that
+// line's PID. (verify) against this router's actual BusyBox ps column
+// layout — this assumes the first whitespace-separated field is the PID,
+// which holds for standard BusyBox `ps` but not every ps variant.
+func findPID(psOutput, procName string) (int, bool) {
+	sc := bufio.NewScanner(strings.NewReader(psOutput))
+	for sc.Scan() {
+		line := sc.Text()
+		if !strings.Contains(line, procName) {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		if pid, err := strconv.Atoi(fields[0]); err == nil {
+			return pid, true
+		}
+	}
+	return 0, false
+}
+
+// --- FirewallRules -----------------------------------------------------
+
+func (b *Backend) FirewallRules(ctx context.Context) ([]backend.FirewallRule, error) {
+	rules, err := b.iptablesRules(ctx, "filter")
+	if err != nil {
+		return nil, err
+	}
+	natRules, err := b.iptablesRules(ctx, "nat")
+	if err != nil {
+		return nil, err
+	}
+	return append(rules, natRules...), nil
+}
+
+// iptablesRules runs `iptables -t <table> -S` and parses each "-A CHAIN
+// ..." line into a FirewallRule. (verify) whether this platform uses
+// iptables or nftables by default — Merlin has historically used iptables
+// for IPv4; if this router's build has moved to nftables the command name
+// and output format here need to change accordingly.
+func (b *Backend) iptablesRules(ctx context.Context, table string) ([]backend.FirewallRule, error) {
+	out, err := b.run(ctx, 5*time.Second, "iptables", "-t", table, "-S")
+	if err != nil {
+		return nil, fmt.Errorf("asuswrt: iptables -t %s -S: %w", table, err)
+	}
+	var rules []backend.FirewallRule
+	sc := bufio.NewScanner(strings.NewReader(out))
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if !strings.HasPrefix(line, "-A ") {
+			continue // skip policy lines ("-P CHAIN ACCEPT") and blanks
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		chain := fields[1]
+		rest := strings.TrimSpace(strings.TrimPrefix(line, "-A "+chain))
+		rules = append(rules, backend.FirewallRule{Table: table, Chain: chain, Rule: rest})
+	}
+	return rules, nil
+}
+
+// --- VPNStatus -----------------------------------------------------------
+
+// VPNStatus checks for a WireGuard interface via `wg show` if the `wg`
+// binary is present; OpenVPN/WARP are not implemented yet (Milestone 3 —
+// docs/ROADMAP.md). Returns an empty, non-error result when no VPN tooling
+// is present, matching a stock router with nothing configured — this is
+// NOT the same as a real "VPN configured but down" state, which the wg
+// parsing below does distinguish once wg is present.
+func (b *Backend) VPNStatus(ctx context.Context) ([]backend.VPNTunnel, error) {
+	out, err := b.run(ctx, 5*time.Second, "wg", "show", "all", "dump")
+	if err != nil {
+		// No `wg` binary, or no WireGuard interfaces configured — both look
+		// like a command failure here and both mean "nothing to report".
+		return nil, nil
+	}
+	return parseWgShowDump(out), nil
+}
+
+// parseWgShowDump parses `wg show all dump` output. Each line is
+// tab-separated; the first field per interface is either the interface
+// summary (5 fields: iface, private-key, public-key, listen-port, fwmark)
+// or a peer line (iface + 7 more fields: pubkey, preshared-key, endpoint,
+// allowed-ips, latest-handshake, rx, tx). (verify) against a real `wg`
+// build on this router — format is stable upstream but untested here.
+// The tunnel's own private key and any peer preshared key are discarded,
+// never surfaced in VPNPeer (see its doc comment).
+func parseWgShowDump(out string) []backend.VPNTunnel {
+	tunnels := make(map[string]*backend.VPNTunnel)
+	order := make([]string, 0)
+
+	sc := bufio.NewScanner(strings.NewReader(out))
+	for sc.Scan() {
+		fields := strings.Split(sc.Text(), "\t")
+		if len(fields) == 0 {
+			continue
+		}
+		name := fields[0]
+		t, exists := tunnels[name]
+		if !exists {
+			t = &backend.VPNTunnel{Name: name, Type: "wireguard", Interface: name}
+			tunnels[name] = t
+			order = append(order, name)
+		}
+
+		switch len(fields) {
+		case 5:
+			// interface line: iface, privkey, pubkey, listen-port, fwmark
+			t.Up = true
+		case 9:
+			// peer line: iface, pubkey, psk, endpoint, allowed-ips, handshake, rx, tx, keepalive
+			peer := backend.VPNPeer{
+				PublicKey:  fields[1],
+				Endpoint:   fields[3],
+				AllowedIPs: strings.Split(fields[4], ","),
+			}
+			if handshakeEpoch, err := strconv.ParseInt(fields[5], 10, 64); err == nil && handshakeEpoch > 0 {
+				peer.LastHandshake = time.Unix(handshakeEpoch, 0)
+			}
+			if rx, err := strconv.ParseUint(fields[6], 10, 64); err == nil {
+				peer.RxBytes = rx
+			}
+			if tx, err := strconv.ParseUint(fields[7], 10, 64); err == nil {
+				peer.TxBytes = tx
+			}
+			t.Peers = append(t.Peers, peer)
+		}
+	}
+
+	out2 := make([]backend.VPNTunnel, 0, len(order))
+	for _, name := range order {
+		out2 = append(out2, *tunnels[name])
+	}
+	return out2
 }
 
 var _ backend.RouterBackend = (*Backend)(nil)

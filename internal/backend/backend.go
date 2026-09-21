@@ -47,4 +47,20 @@ type RouterBackend interface {
 
 	// ListBackups returns known backups, newest first.
 	ListBackups(ctx context.Context) ([]BackupInfo, error)
+
+	// NVRAMDump returns the full nvram key/value set. This is the one place
+	// secrets can appear (Wi-Fi passphrase, admin password, ...) — callers
+	// that persist or transmit the result (internal/capture in particular)
+	// must sanitize it. See docs/security.md "Secrets at rest".
+	NVRAMDump(ctx context.Context) (map[string]string, error)
+
+	// Services returns the running state of known router-managed services.
+	Services(ctx context.Context) ([]ServiceStatus, error)
+
+	// FirewallRules returns the current packet-filtering rule set.
+	FirewallRules(ctx context.Context) ([]FirewallRule, error)
+
+	// VPNStatus returns configured VPN tunnels and their peers (WireGuard,
+	// OpenVPN, WARP). Never includes private keys — see VPNPeer.
+	VPNStatus(ctx context.Context) ([]VPNTunnel, error)
 }

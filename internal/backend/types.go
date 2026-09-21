@@ -37,9 +37,13 @@ const (
 )
 
 // Interface describes one network interface (physical, VLAN, bridge, tunnel).
+// Traffic-statistics simulation/capture is deliberately not a separate
+// method — the Rx/Tx counters here are the traffic stats; a dedicated
+// TrafficStats() would just duplicate this data under another name.
 type Interface struct {
 	Name      string         `json:"name"`
-	Type      string         `json:"type"` // "ethernet", "wifi", "bridge", "vpn", "vlan"
+	Type      string         `json:"type"`           // "ethernet", "wifi", "bridge", "vpn", "vlan"
+	Role      string         `json:"role,omitempty"` // "wan", "lan", "guest", "unknown" — best-effort
 	State     InterfaceState `json:"state"`
 	MAC       string         `json:"mac,omitempty"`
 	Addresses []string       `json:"addresses,omitempty"`  // CIDR notation
@@ -105,4 +109,46 @@ type BackupInfo struct {
 	SHA256    string    `json:"sha256"`
 	CreatedAt time.Time `json:"created_at"`
 	Reason    string    `json:"reason,omitempty"` // e.g. "pre-rollback", "manual", "scheduled"
+}
+
+// ServiceStatus is the running state of one router-managed service
+// (dnsmasq, httpd, wireguard, openvpn, ...).
+type ServiceStatus struct {
+	Name    string `json:"name"`
+	Running bool   `json:"running"`
+	PID     int    `json:"pid,omitempty"`
+}
+
+// FirewallRule is one rule from the router's packet-filtering configuration.
+// Deliberately a thin, mostly-opaque representation (raw table/chain/rule
+// text) rather than a fully parsed/structured rule — full iptables/nftables
+// modeling is Milestone 3 scope (docs/ROADMAP.md); this is enough for
+// read-only status/capture/health-check purposes today.
+type FirewallRule struct {
+	Table string `json:"table"` // e.g. "filter", "nat"
+	Chain string `json:"chain"` // e.g. "FORWARD", "INPUT", "PREROUTING"
+	Rule  string `json:"rule"`  // raw rule text, implementation-specific
+}
+
+// VPNPeer is one configured peer of a VPN tunnel. Never carries a private
+// key — only identifying/connection-state fields that are safe to log,
+// capture, and display. See docs/security.md "Secrets at rest".
+type VPNPeer struct {
+	Name          string    `json:"name,omitempty"`
+	PublicKey     string    `json:"public_key,omitempty"`
+	Endpoint      string    `json:"endpoint,omitempty"`
+	AllowedIPs    []string  `json:"allowed_ips,omitempty"`
+	LastHandshake time.Time `json:"last_handshake,omitempty"`
+	RxBytes       uint64    `json:"rx_bytes"`
+	TxBytes       uint64    `json:"tx_bytes"`
+}
+
+// VPNTunnel is one configured VPN tunnel (WireGuard/OpenVPN/WARP) and its peers.
+type VPNTunnel struct {
+	Name         string    `json:"name"` // e.g. "wg0", "warp0", "ovpnc1"
+	Type         string    `json:"type"` // "wireguard", "openvpn", "warp"
+	Interface    string    `json:"interface"`
+	Up           bool      `json:"up"`
+	LocalAddress string    `json:"local_address,omitempty"`
+	Peers        []VPNPeer `json:"peers,omitempty"`
 }
