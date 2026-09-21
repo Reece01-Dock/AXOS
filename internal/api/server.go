@@ -18,12 +18,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/reece01-dock/axos/internal/audit"
 	"github.com/reece01-dock/axos/internal/backend"
 	"github.com/reece01-dock/axos/internal/rollback"
 	"github.com/reece01-dock/axos/internal/rollbackctl"
+	"github.com/reece01-dock/axos/internal/supervisor"
 )
 
 // Server hosts the AXOS Core API. Build one with NewServer and pass its
@@ -33,12 +38,21 @@ type Server struct {
 	Backend  backend.RouterBackend
 	Rollback *rollback.Engine
 	Audit    *audit.Logger
+	// Supervisor is optional (nil by default): axosd only manages
+	// hot-deployable sibling services once there are real ones worth
+	// supervising (see cmd/axosd's -services-config flag). When nil, the
+	// /v1/supervisor/services/* routes respond 501 rather than pretending —
+	// no service is silently faked as "running".
+	Supervisor *supervisor.Supervisor
 
 	local *rollbackctl.Local // reuses the same snapshot-then-arm composition Local implements
 	mux   *http.ServeMux
 }
 
-// NewServer wires up all routes.
+// NewServer wires up all routes. Supervisor is optional — pass nil if this
+// axosd instance has no hot-deployable sibling services to manage yet (see
+// the Supervisor field's doc comment); set it directly on the returned
+// *Server before serving if you do.
 func NewServer(be backend.RouterBackend, rb *rollback.Engine, al *audit.Logger) *Server {
 	s := &Server{
 		Backend:  be,
@@ -78,6 +92,27 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /v1/rollback/arm", s.handleRollbackArm)
 	s.mux.HandleFunc("POST /v1/rollback/confirm", s.handleRollbackConfirm)
 	s.mux.HandleFunc("GET /v1/rollback/status", s.handleRollbackStatus)
+
+	// Note the /v1/supervisor/ prefix, distinct from /v1/services above:
+	// that route is RouterBackend.Services() (router-native OS services
+	// like dnsmasq/httpd); these are AXOS's own hot-deployable sibling
+	// processes (axos-mcp, axos-monitor, ...) managed by internal/supervisor
+	// — a different concept that happens to share the word "services".
+	s.mux.HandleFunc("GET /v1/supervisor/services", s.handleServicesStatus)
+	s.mux.HandleFunc("GET /v1/supervisor/services/{name}/status", s.handleServiceStatus)
+	s.mux.HandleFunc("GET /v1/supervisor/services/{name}/health", s.handleServiceHealth)
+	s.mux.HandleFunc("POST /v1/supervisor/services/{name}/start", s.handleServiceStart)
+	s.mux.HandleFunc("POST /v1/supervisor/services/{name}/stop", s.handleServiceStop)
+	s.mux.HandleFunc("POST /v1/supervisor/services/{name}/restart", s.handleServiceRestart)
+	s.mux.HandleFunc("GET /v1/supervisor/services/{name}/logs", s.handleServiceLogs)
+}
+
+func (s *Server) requireSupervisor(w http.ResponseWriter) bool {
+	if s.Supervisor == nil {
+		writeError(w, http.StatusNotImplemented, fmt.Errorf("this axosd instance has no supervised services configured"))
+		return false
+	}
+	return true
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -287,4 +322,118 @@ func readJSON(r *http.Request, dst interface{}) error {
 		return fmt.Errorf("invalid JSON body: %w", err)
 	}
 	return nil
+}
+
+// --- Supervisor (hot-deployable sibling services) ---------------------
+//
+// All routes here 501 if Supervisor is nil (see requireSupervisor) — axosd
+// doesn't pretend to manage services it isn't actually configured to.
+
+func (s *Server) handleServicesStatus(w http.ResponseWriter, r *http.Request) {
+	if !s.requireSupervisor(w) {
+		return
+	}
+	writeJSON(w, http.StatusOK, s.Supervisor.StatusAll())
+}
+
+func (s *Server) handleServiceStatus(w http.ResponseWriter, r *http.Request) {
+	if !s.requireSupervisor(w) {
+		return
+	}
+	st, err := s.Supervisor.Status(r.PathValue("name"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+func (s *Server) handleServiceHealth(w http.ResponseWriter, r *http.Request) {
+	if !s.requireSupervisor(w) {
+		return
+	}
+	h, err := s.Supervisor.HealthCheck(r.Context(), r.PathValue("name"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, h)
+}
+
+func (s *Server) handleServiceStart(w http.ResponseWriter, r *http.Request) {
+	if !s.requireSupervisor(w) {
+		return
+	}
+	name := r.PathValue("name")
+	err := s.Supervisor.Start(r.Context(), name)
+	s.audit(s.actor(r), "service.start", map[string]interface{}{"name": name}, "", err)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "started"})
+}
+
+func (s *Server) handleServiceStop(w http.ResponseWriter, r *http.Request) {
+	if !s.requireSupervisor(w) {
+		return
+	}
+	name := r.PathValue("name")
+	err := s.Supervisor.Stop(r.Context(), name)
+	s.audit(s.actor(r), "service.stop", map[string]interface{}{"name": name}, "", err)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "stopped"})
+}
+
+func (s *Server) handleServiceRestart(w http.ResponseWriter, r *http.Request) {
+	if !s.requireSupervisor(w) {
+		return
+	}
+	name := r.PathValue("name")
+	err := s.Supervisor.Restart(r.Context(), name)
+	s.audit(s.actor(r), "service.restart", map[string]interface{}{"name": name}, "", err)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "restarted"})
+}
+
+// handleServiceLogs returns the tail of a service's log file (see
+// Supervisor.LogDir). Not audited — reading logs isn't a mutating action.
+func (s *Server) handleServiceLogs(w http.ResponseWriter, r *http.Request) {
+	if !s.requireSupervisor(w) {
+		return
+	}
+	name := r.PathValue("name")
+	lines := 200
+	if v := r.URL.Query().Get("lines"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			lines = n
+		}
+	}
+
+	if s.Supervisor.LogDir == "" {
+		writeError(w, http.StatusNotImplemented, fmt.Errorf("this axosd instance has no service log directory configured"))
+		return
+	}
+	data, err := os.ReadFile(filepath.Join(s.Supervisor.LogDir, name+".log"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, fmt.Errorf("no log file for service %q: %w", name, err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"log": tailLines(string(data), lines)})
+}
+
+// tailLines returns at most the last n lines of s.
+func tailLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) <= n {
+		return s
+	}
+	return strings.Join(lines[len(lines)-n:], "\n")
 }

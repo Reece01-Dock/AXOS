@@ -22,6 +22,8 @@ import (
 	"github.com/reece01-dock/axos/internal/mcp"
 	"github.com/reece01-dock/axos/internal/rollback"
 	"github.com/reece01-dock/axos/internal/rollbackctl"
+	"github.com/reece01-dock/axos/internal/supervisor"
+	"github.com/reece01-dock/axos/internal/svcconfig"
 )
 
 func main() {
@@ -64,8 +66,12 @@ Common flags:
                           serve mode reads it per-request from X-Axos-Actor)
 
 'serve'-only flags:
-  -api-addr string    Address the Core API listens on (default "127.0.0.1:9090" —
-                       see docs/security.md before widening this)`)
+  -api-addr string        Address the Core API listens on (default "127.0.0.1:9090" —
+                           see docs/security.md before widening this)
+  -services-config string  Path to a JSON file registering hot-deployable
+                            sibling services for axosd to supervise (optional —
+                            see internal/svcconfig; empty/missing is normal)
+  -service-log-dir string   Directory for supervised services' stdout/stderr logs`)
 }
 
 func backendFlags(fs *flag.FlagSet) *backendselect.Options {
@@ -81,6 +87,8 @@ func runServe(args []string) {
 	beOpts := backendFlags(fs)
 	auditPath := fs.String("audit", "./axosd-audit.jsonl", "Path to the append-only audit log")
 	apiAddr := fs.String("api-addr", "127.0.0.1:9090", "Address the Core API listens on")
+	servicesConfig := fs.String("services-config", "", "Path to a JSON file registering supervised sibling services (optional)")
+	serviceLogDir := fs.String("service-log-dir", "", "Directory for supervised services' logs (optional)")
 	_ = fs.Parse(args)
 
 	be, err := backendselect.New(*beOpts)
@@ -96,6 +104,26 @@ func runServe(args []string) {
 
 	rb := newLoggingRollbackEngine(al)
 	server := api.NewServer(be, rb, al)
+
+	sup := supervisor.New(*serviceLogDir)
+	specs, err := svcconfig.Load(*servicesConfig)
+	if err != nil {
+		log.Fatalf("axosd: %v", err)
+	}
+	for _, spec := range specs {
+		sup.Register(spec)
+		// Auto-start on registration: a supervisor that registers a
+		// service but leaves it stopped until someone remembers to call
+		// "restart" isn't really supervising it. A start failure here is
+		// logged, not fatal — one misconfigured sibling service shouldn't
+		// take down axosd's own Core API.
+		if err := sup.Start(context.Background(), spec.Name); err != nil {
+			log.Printf("axosd: WARNING: failed to start supervised service %q: %v", spec.Name, err)
+		} else {
+			log.Printf("axosd: started supervised service %q", spec.Name)
+		}
+	}
+	server.Supervisor = sup
 
 	ln, err := net.Listen("tcp", *apiAddr)
 	if err != nil {
