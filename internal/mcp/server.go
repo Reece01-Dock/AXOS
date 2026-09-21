@@ -83,8 +83,15 @@ func (s *Server) registerTools() {
 	s.register("network.interfaces", "List network interfaces and their state/counters.", schema(""), false, handleInterfaces)
 	s.register("network.routes", "List routing table entries.", schema(`"table":{"type":"string"}`), false, handleRoutes)
 	s.register("network.clients", "List known connected devices (DHCP/ARP/Wi-Fi merged).", schema(""), false, handleClients)
+	s.register("network.firewall_rules", "List current packet-filtering rules.", schema(""), false, handleFirewallRules)
+	s.register("network.vpn_status", "List configured VPN tunnels and their peers (never includes private keys).", schema(""), false, handleVPNStatus)
 
 	s.register("wifi.status", "Wi-Fi radio state: channel, width, clients, SSID.", schema(""), false, handleWiFiStatus)
+
+	s.register("system.services", "Running state of known router-managed services.", schema(""), false, handleServices)
+	s.register("system.nvram_dump",
+		"Full nvram key/value dump. Contains secrets (Wi-Fi passphrase, admin password) — same trust boundary as this whole API, not a new exposure (docs/security.md). Not audited on read, matching this project's convention that only mutating calls are audited.",
+		schema(""), false, handleNVRAMDump)
 
 	s.register("rollback.arm",
 		"Arm automatic rollback before a risky change: if rollback.confirm isn't called within timeout_seconds, the snapshot is restored automatically.",

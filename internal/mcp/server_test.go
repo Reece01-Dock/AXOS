@@ -94,7 +94,11 @@ func TestToolsList_IncludesCoreTools(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	want := []string{"system.info", "system.shell_exec", "network.interfaces", "wifi.status", "rollback.arm", "rollback.confirm", "config.backup"}
+	want := []string{
+		"system.info", "system.shell_exec", "system.services", "system.nvram_dump",
+		"network.interfaces", "network.firewall_rules", "network.vpn_status",
+		"wifi.status", "rollback.arm", "rollback.confirm", "config.backup",
+	}
 	got := map[string]bool{}
 	for _, tool := range lr.Tools {
 		got[tool.Name] = true
@@ -115,6 +119,30 @@ func TestToolsCall_SystemInfo(t *testing.T) {
 	}
 	if len(tr.Content) != 1 || !strings.Contains(tr.Content[0].Text, "GT-AX6000") {
 		t.Fatalf("system.info content = %+v, want it to mention GT-AX6000", tr.Content)
+	}
+}
+
+func TestToolsCall_NewRouterStateTools(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	cases := []struct {
+		tool          string
+		wantSubstring string
+	}{
+		{"system.services", `"name":"dnsmasq"`},
+		{"system.nvram_dump", `"productid":"GT-AX6000"`},
+		{"network.firewall_rules", `"chain":"INPUT"`},
+		{"network.vpn_status", "[]"}, // mock's default fixture has no VPN configured
+	}
+	for _, c := range cases {
+		resp := call(t, s, toolCallRequest(t, "1", c.tool, nil))
+		tr := decodeToolResult(t, resp)
+		if tr.IsError {
+			t.Fatalf("%s returned error: %+v", c.tool, tr)
+		}
+		if len(tr.Content) != 1 || !strings.Contains(tr.Content[0].Text, c.wantSubstring) {
+			t.Errorf("%s content = %+v, want it to contain %q", c.tool, tr.Content, c.wantSubstring)
+		}
 	}
 }
 

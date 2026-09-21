@@ -68,12 +68,45 @@ docker run --rm \
 echo "==> Locating build output"
 found=$(find "$MERLIN_SRC" -maxdepth 6 -iname "*GT-AX6000*" \( -iname "*.w" -o -iname "*.pkgtb" -o -iname "*.trx" \) -print -quit || true)
 if [ -n "$found" ]; then
+  image_name="$(basename "$found")"
   cp -v "$found" "$OUT_DIR/"
-  echo "==> Output copied to $OUT_DIR/$(basename "$found")"
+  echo "==> Output copied to $OUT_DIR/$image_name"
+
+  echo "==> Hashing artifact"
+  image_sha256="$(sha256sum "$OUT_DIR/$image_name" | awk '{print $1}')"
+  echo "    sha256: $image_sha256"
+
+  echo "==> Writing build manifest"
+  pinned_file="$HERE/.sources-pinned"
+  merlin_ref="unknown"; merlin_commit="unknown"
+  toolchains_ref="unknown"; toolchains_commit="unknown"
+  if [ -f "$pinned_file" ]; then
+    # shellcheck disable=SC1090
+    . "$pinned_file"
+    merlin_ref="${MERLIN_REF:-unknown}"; merlin_commit="${MERLIN_COMMIT:-unknown}"
+    toolchains_ref="${TOOLCHAINS_REF:-unknown}"; toolchains_commit="${TOOLCHAINS_COMMIT:-unknown}"
+  else
+    echo "    warning: $pinned_file not found (did you run setup-sources.sh?) — manifest refs will read 'unknown'"
+  fi
+  manifest_path="$OUT_DIR/$image_name.manifest.json"
+  cat > "$manifest_path" <<EOF
+{
+  "image": "$image_name",
+  "sha256": "$image_sha256",
+  "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "apply_patches": $([ "$APPLY_PATCHES" = "1" ] && echo true || echo false),
+  "merlin_ref": "$merlin_ref",
+  "merlin_commit": "$merlin_commit",
+  "toolchains_ref": "$toolchains_ref",
+  "toolchains_commit": "$toolchains_commit"
+}
+EOF
+  echo "==> Manifest written to $manifest_path"
 else
   echo "warning: could not locate a firmware image automatically — inspect the"
   echo "         build tree's release/ or image/ output directory by hand and"
   echo "         update this script's search once the real path is known."
+  echo "         (no hash or manifest was generated, since there is no artifact yet)"
 fi
 
 echo "==> Build script finished. Record the resulting refs in docs/ROADMAP.md / flashing-and-recovery.md before flashing."

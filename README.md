@@ -13,9 +13,18 @@ connectivity.
 
 | Path | Purpose |
 |---|---|
-| `docs/` | Roadmap, architecture, build guide, flashing & recovery, MCP API, safety design, security model |
+| `docs/` | Roadmap, architecture, hot-deploy dev workflow, build guide, flashing & recovery, MCP API, safety design, security model |
 | `firmware/` | Reproducible Merlin build environment (Docker), source fetch + build scripts, patches |
-| `axosd/` | AXOS core service daemon (Go): shared router API, MCP server, rollback engine, audit log |
+| `cmd/axosd/` | Core service daemon: owns the RouterBackend, rollback engine, and audit log; exposes them via `serve` (HTTP Core API — the normal way to run it) or `mcp` (single-process MCP, no separate axos-mcp needed) |
+| `cmd/axos-mcp/` | MCP frontend as an **independent process** — a thin client of axosd's Core API, restartable without touching axosd's state (armed rollback timers, audit log) |
+| `cmd/axosctl/` | The control CLI: `status`, `health`, `deploy`, `rollback`, `restart`, `logs`, `capture`, `transaction`, and the `dev deploy/watch/restart/test` hot-development loop |
+| `internal/backend/` | `RouterBackend` interface + implementations: `mock` (in-memory, dev/test), `replay` (serves captured fixtures), `asuswrt` (real router, local or SSH), `httpclient` (talks to axosd's Core API) |
+| `internal/api/` | The Core API itself (HTTP/JSON) — what `axos-mcp` and `axosctl` actually talk to |
+| `internal/deploy/` | Atomic release layout: `staging/` → `releases/NNNNNN/` → `current`/`previous` symlinks, checksum-verified |
+| `internal/supervisor/` | Process supervision for hot-deployable services: start/stop/restart, health checks, crash-restart with backoff |
+| `internal/capture/`, `internal/rollback/`, `internal/rollbackctl/` | Router-state capture/sanitization; the arm/confirm/auto-revert safety engine and its frontend-facing interface |
+| `scripts/deploy-router.sh` | Build+test locally, deploy to a real router over SSH (untested against real hardware — see the script's own header) |
+| `scripts/build-firmware.sh` | Thin wrapper for the firmware build (delegates to `firmware/build.sh`) |
 | `scripts/router/` | Helpers that run on the router itself (install, service hooks) |
 
 ## Architecture (short version)
@@ -23,19 +32,19 @@ connectivity.
 ```
 GT-AX6000 hardware
   └─ Broadcom binary blobs (Wi-Fi, flow acceleration — kept, never replaced)
-      └─ Forked Asuswrt-Merlin firmware
-          └─ axosd — AXOS core services (single static Go binary)
-              └─ shared RouterBackend API
-                  └─ MCP server / Web UI / CLI  (one backend, three frontends)
+      └─ Forked Asuswrt-Merlin firmware   (release/integration track)
+          └─ axosd — AXOS Core API (HTTP/JSON), owns RouterBackend + rollback + audit
+              └─ axos-mcp / axosctl / (future) Web UI — independent processes,
+                 each a thin client of the Core API, hot-restartable on their own
 ```
 
-There is exactly **one** control plane: `axosd`. The MCP server, the future web UI
-and the CLI are all thin frontends over the same `RouterBackend` interface. The
-`AsuswrtBackend` implementation talks to nvram, rc services, iptables, `wl`, and
-Broadcom tools; a `MockBackend` exists for development and tests; other backends
-(OpenWrt, GL.iNet) can be added later without touching the frontends.
-
-See [`docs/architecture.md`](docs/architecture.md).
+There is exactly **one** control plane: `axosd`'s Core API. `axos-mcp`, `axosctl`,
+and the future web UI are all thin frontends over the same `RouterBackend`
+interface, reached over HTTP rather than embedded directly — which is what lets
+any of them be rebuilt and restarted without disturbing axosd's own in-flight
+state. See [`docs/development.md`](docs/development.md) for the day-to-day
+hot-deploy workflow this enables, and [`docs/architecture.md`](docs/architecture.md)
+for the full design.
 
 ## Current status
 
@@ -46,15 +55,23 @@ run end-to-end on a build machine, and no image has been verified on a real
 GT-AX6000 — recovery mode must be tested first regardless (see
 `docs/flashing-and-recovery.md`).
 
-**Milestone 2 (axosd core service) — code complete against the mock backend,
-untested on hardware.** `axosd` (`axosd/`) builds cleanly for both the host
-and `GOOS=linux GOARCH=arm64` (a static binary with no runtime dependencies),
-and its full test suite (17 tests: rollback arm/confirm/auto-revert including
-the "AI never confirms → automatic restore" property, audit logging, and the
-MCP tool surface end-to-end) passes against the mock backend. The `asuswrt`
-backend (`axosd/internal/backend/asuswrt`) is implemented against documented
-Asuswrt-Merlin conventions but every hardware-specific assumption in it —
-nvram key names, interface naming, `wl` output parsing — is marked
+**Milestone 2 (core service) — code complete and verified end-to-end against
+the mock/replay backends and real compiled binaries; untested against real
+hardware.** The whole module builds cleanly for the host and for
+`GOOS=linux GOARCH=arm64` (static binaries, no runtime dependencies), with
+99 automated tests passing. Beyond the unit tests, the actual compiled
+`axosd`/`axos-mcp`/`axosctl` binaries have been run against each other as
+real, separate OS processes and confirmed to: serve the Core API and answer
+router-status calls; run `axos-mcp` as a genuinely independent process
+against it (including proving an armed rollback transaction survives
+`axos-mcp` restarting — the whole reason the Core API exists); stage, deploy,
+and roll back real release directories with `axosctl`; and capture a
+sanitized fixture set from the mock backend with the Wi-Fi passphrase
+confirmed redacted on disk. The `asuswrt` backend
+(`internal/backend/asuswrt`) is implemented against documented
+Asuswrt-Merlin conventions, including an SSH transport for driving a remote
+router, but every hardware-specific assumption in it — nvram key names,
+interface naming, `wl`/`iptables`/`wg` output parsing — is marked
 `(verify)` and has not been checked against a real router.
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone checklists — that file
@@ -80,6 +97,12 @@ is the source of truth for what is actually verified vs. merely written.
    what's actually protected today (owner-only permissions on every
    secret-bearing file, checksum-verified restores), and what's explicitly
    still a gap (encryption at rest, network-transport auth).
+8. **Firmware flashing is a release step, not the development loop.** Editing
+   MCP tools, API logic, VPN/firewall/routing/DNS handling, or anything else
+   that lives in `axosd`/`axos-mcp`/`axosctl` should never require a reboot —
+   see [`docs/development.md`](docs/development.md) for the
+   edit → build → test → deploy → restart-one-service → health-check loop
+   this repo is built around.
 
 ## Licensing note
 
@@ -87,4 +110,4 @@ Asuswrt-Merlin is a mix of GPL code and proprietary ASUS/Broadcom components.
 The Merlin fork (when created under `firmware/`) inherits those licences and their
 redistribution restrictions — in particular, **firmware images containing Broadcom
 proprietary components must not be redistributed**; they are for our own devices.
-Original AXOS code in this repository (`axosd/`, `scripts/`) is ours.
+Original AXOS code in this repository (`cmd/`, `internal/`, `scripts/`) is ours.

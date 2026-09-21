@@ -3,8 +3,13 @@
 The AI is trusted as a full router administrator. Tools are namespaced, typed,
 and all map onto the same `RouterBackend` used by the web UI and CLI.
 
-Transport (M2): MCP over stdio (`axosd mcp`), typically bridged via SSH.
-Protocol: MCP (JSON-RPC 2.0; `initialize`, `tools/list`, `tools/call`).
+Transport: `axos-mcp` (a standalone process — see `docs/development.md`)
+speaks MCP over stdio and is itself a thin client of `axosd serve`'s Core
+API over HTTP/loopback (or an SSH tunnel to it for dev-PC-to-router use —
+see `docs/security.md` "MCP transport & access control"). `axosd mcp`
+(single-process mode) speaks MCP directly over stdio with no separate
+`axos-mcp` process, useful for quick manual testing. Protocol: MCP
+(JSON-RPC 2.0; `initialize`, `tools/list`, `tools/call`).
 
 ## Tool catalog
 
@@ -19,7 +24,8 @@ Status: ✅ implemented in axosd (mock-tested, hardware-unverified) ·
 | `system.info` | ✅ | model, firmware, uptime, serial |
 | `system.resources` | ✅ | CPU load, memory, temperatures |
 | `system.shell_exec` | ✅ | **[danger-lite]** unrestricted root shell with timeout; the escape hatch when no dedicated tool exists; fully audited (command, exit code, output hash) |
-| `system.services` | 🔜 | list/restart rc services |
+| `system.services` | ✅ | running state of known router-managed services (read-only; *restart* individual native services is 🔜 Milestone 3 — not to be confused with `axosctl restart`, which restarts AXOS's own hot-deployable processes, see `docs/development.md`) |
+| `system.nvram_dump` | ✅ | full nvram key/value dump; contains secrets, same trust boundary as the rest of this API (`docs/security.md`); not audited on read, matching the "only mutating calls are audited" convention |
 | `system.update` | 🔮 | firmware update flow (human confirmation required) |
 | `system.packages` | 🔮 | optional module/package management |
 
@@ -27,9 +33,11 @@ Status: ✅ implemented in axosd (mock-tested, hardware-unverified) ·
 
 | Tool | Status | Notes |
 |---|---|---|
-| `network.interfaces` | ✅ | state, addresses, counters, link speed |
+| `network.interfaces` | ✅ | state, role (wan/lan/...), addresses, counters, link speed |
 | `network.routes` | ✅ | per routing table |
 | `network.clients` | ✅ | DHCP + ARP + Wi-Fi assoc merged |
+| `network.firewall_rules` | ✅ | current packet-filter rules (read-only; mutation is 🔜 Milestone 3) |
+| `network.vpn_status` | ✅ | configured VPN tunnels + peers, read-only (never includes private keys); mutation (create/import/up/down) is 🔜 Milestone 3 |
 | `network.diag.ping` / `.traceroute` / `.dns_lookup` | 🔜 | from-router diagnostics |
 | `network.perf.iperf3` / `.speedtest` / `.loaded_latency` | 🔜 | benchmarking |
 

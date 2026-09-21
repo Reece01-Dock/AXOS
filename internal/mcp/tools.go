@@ -70,6 +70,22 @@ func handleWiFiStatus(ctx context.Context, s *Server, _ json.RawMessage) (interf
 	return s.Backend.WiFiStatus(ctx)
 }
 
+func handleFirewallRules(ctx context.Context, s *Server, _ json.RawMessage) (interface{}, error) {
+	return s.Backend.FirewallRules(ctx)
+}
+
+func handleVPNStatus(ctx context.Context, s *Server, _ json.RawMessage) (interface{}, error) {
+	return s.Backend.VPNStatus(ctx)
+}
+
+func handleServices(ctx context.Context, s *Server, _ json.RawMessage) (interface{}, error) {
+	return s.Backend.Services(ctx)
+}
+
+func handleNVRAMDump(ctx context.Context, s *Server, _ json.RawMessage) (interface{}, error) {
+	return s.Backend.NVRAMDump(ctx)
+}
+
 type rollbackArmArgs struct {
 	TimeoutSeconds int    `json:"timeout_seconds"`
 	Reason         string `json:"reason"`

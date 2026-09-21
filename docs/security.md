@@ -45,19 +45,38 @@ defend against, by the nature of the project:**
 
 ## MCP transport & access control
 
-**Today (Milestone 2):** `axosd mcp` speaks JSON-RPC over stdio only — no
-network listener at all (`internal/mcp/server.go`'s `Serve` takes an
-`io.Reader`/`io.Writer`, nothing binds a socket). The only way to reach it is
-to already be able to run a process on the router, which in practice means
-**SSH access to the router is the entire authentication perimeter**. This is
-deliberately the most conservative option available and is why the docs
-elsewhere describe the "typical AI-client wiring" as `ssh router axosd mcp
-...` — SSH's own key-based auth is what's actually gating access, and it
-should be treated with the same care as root access, because functionally it
-is root access.
+**As of the hot-deploy architecture (`docs/development.md`), `axosd serve`
+binds a real TCP listener** for the Core API (`internal/api`) — this
+section is updated from an earlier, stdio-only version of this document;
+read it as current, not as a "someday" plan.
 
-Concretely, that means:
+**The Core API has no authentication of its own — none.** Any request that
+reaches the listening port gets full access: the complete nvram dump
+(secrets included), `system.shell_exec`, rollback arm/confirm, supervised
+service start/stop/restart. There is no token, no mTLS, no user model. This
+is a deliberate scope decision for this milestone, not an oversight, but it
+means **the entire security perimeter is "can this request reach the
+socket at all"** — restated from the pre-API version of this document,
+still true, now resting on a different mechanism:
 
+- **The default bind is `127.0.0.1` only** (`cmd/axosd`'s `-api-addr` flag
+  defaults to `127.0.0.1:9090`), enforced as the flag default, not merely
+  documented. With that default, reaching the API requires either already
+  running a process on the router (equivalent to the old stdio-only
+  story — SSH access is still the perimeter) or an SSH-forwarded tunnel to
+  that port from elsewhere.
+- **`axos-mcp`/`axosctl` run on a dev PC, talking to a router over the
+  network** (`docs/development.md` "Live Development Mode") — this is a
+  real, intended use case, and it must **not** be achieved by widening
+  `-api-addr` to `0.0.0.0` or a LAN-facing address. The correct way: SSH
+  port-forward the loopback-bound port out —
+  `ssh -L 9090:127.0.0.1:9090 router` — and point `axos-mcp`/`axosctl` at
+  `http://127.0.0.1:9090` locally. This keeps SSH as the one authentication
+  perimeter and adds zero new exposure. Widening the bind address instead
+  is a **standing decision to run an unauthenticated full-root API on the
+  network** — never do this as a convenience shortcut; if a real need for
+  non-loopback binding ever arises, treat it as the "future network
+  transport" case below, not as flipping a flag.
 - **Key-based SSH auth only.** Disable password auth on the router
   (`nvram set sshd_pass=0` equivalent in Merlin's SSH settings) before AXOS
   is used for anything beyond lab testing.
@@ -68,19 +87,20 @@ Concretely, that means:
   manager, a local keychain) as a **root credential for the router**, full
   stop.
 
-**The `-actor` flag is a label, not authentication.** `axosd mcp -actor=X`
-records `X` in the audit log for attribution — it is entirely self-asserted
-by whoever launches the process and provides zero access control. Don't
-mistake it for an auth mechanism when reading the audit log's `actor` field:
-it tells you what the caller *claimed* to be, not what was verified.
+**The `-actor` flag / `X-Axos-Actor` header is a label, not authentication.**
+Both `axosd mcp -actor=X` and every `httpclient.Client` request record `X`
+in the audit log for attribution — entirely self-asserted by whoever sends
+the request, zero access control. Don't mistake it for an auth mechanism
+when reading the audit log's `actor` field: it tells you what the caller
+*claimed* to be, not what was verified.
 
-**Before any future network transport** (HTTP/SSE, planned but not built —
-`docs/architecture.md` "MCP transport"): it must ship with, at minimum,
-token- or mTLS-based auth from day one, must default to binding LAN-only
-(never WAN — see "Network exposure defaults" below), and this document's
-threat model must be revisited before that transport is turned on for
-anything beyond localhost testing. There is no reason to rush this; stdio
-over SSH already covers the Milestone 2–3 use case.
+**Before the API is ever bound beyond loopback** (a real future network
+transport, not the SSH-tunneled loopback case above): it must ship with, at
+minimum, token- or mTLS-based auth, must default to binding LAN-only (never
+WAN — see "Network exposure defaults" below), and this document's threat
+model must be revisited. There is no reason to rush this; SSH-tunneled
+loopback already covers the dev-PC-to-router case the project actually
+needs today.
 
 ## Network exposure defaults
 
@@ -216,10 +236,14 @@ continuous") starts from a checklist instead of a blank page:
       permissions, enforced on every write (tested)
 - [x] Audit log: owner-only permissions, enforced on open (tested)
 - [x] Restore verifies backup integrity via checksum before applying (tested)
+- [x] Core API (`axosd serve`) defaults to binding `127.0.0.1` only,
+      enforced as the flag default (`docs/development.md`; use an SSH
+      tunnel for dev-PC-to-router access, never widen the bind)
 - [ ] SSH password auth disabled on the router (verify during Milestone 1/2
       hardware bring-up; router default may have it enabled)
 - [ ] Backup encryption at rest (blocked on a key-management decision, above)
 - [ ] Dedicated VPN secrets store (Milestone 3)
 - [ ] Firmware image signing / verified `system.update` (Milestone 4+)
-- [ ] Network transport auth design (only needed if/when stdio-over-SSH stops
-      being sufficient)
+- [ ] Core API authentication (token/mTLS) — required before the API is
+      ever bound beyond loopback; not needed for the SSH-tunneled loopback
+      case the project uses today
