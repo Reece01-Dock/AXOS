@@ -8,9 +8,9 @@ import (
 	"io"
 	"log"
 
-	"github.com/reece01-dock/axos/axosd/internal/audit"
-	"github.com/reece01-dock/axos/axosd/internal/backend"
-	"github.com/reece01-dock/axos/axosd/internal/rollback"
+	"github.com/reece01-dock/axos/internal/audit"
+	"github.com/reece01-dock/axos/internal/backend"
+	"github.com/reece01-dock/axos/internal/rollback"
 )
 
 const serverVersion = "0.1.0-milestone2"

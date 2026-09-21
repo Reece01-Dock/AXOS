@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/reece01-dock/axos/axosd/internal/audit"
-	mockbackend "github.com/reece01-dock/axos/axosd/internal/backend/mock"
-	"github.com/reece01-dock/axos/axosd/internal/rollback"
+	"github.com/reece01-dock/axos/internal/audit"
+	mockbackend "github.com/reece01-dock/axos/internal/backend/mock"
+	"github.com/reece01-dock/axos/internal/rollback"
 )
 
 func newTestServer(t *testing.T) (*Server, *bytes.Buffer) {

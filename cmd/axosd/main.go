@@ -11,12 +11,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/reece01-dock/axos/axosd/internal/audit"
-	"github.com/reece01-dock/axos/axosd/internal/backend"
-	"github.com/reece01-dock/axos/axosd/internal/backend/asuswrt"
-	"github.com/reece01-dock/axos/axosd/internal/backend/mock"
-	"github.com/reece01-dock/axos/axosd/internal/mcp"
-	"github.com/reece01-dock/axos/axosd/internal/rollback"
+	"github.com/reece01-dock/axos/internal/audit"
+	"github.com/reece01-dock/axos/internal/backend"
+	"github.com/reece01-dock/axos/internal/backend/asuswrt"
+	"github.com/reece01-dock/axos/internal/backend/mock"
+	"github.com/reece01-dock/axos/internal/mcp"
+	"github.com/reece01-dock/axos/internal/rollback"
 )
 
 func main() {

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/reece01-dock/axos/axosd/internal/rollback"
+	"github.com/reece01-dock/axos/internal/rollback"
 )
 
 func decodeArgs(raw json.RawMessage, v interface{}) error {
