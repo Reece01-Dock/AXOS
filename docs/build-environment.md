@@ -12,7 +12,13 @@ distro and package set the Merlin HND toolchain expects.
 ## Requirements
 
 - x86_64 Linux host (or VM) with Docker
-- **~60 GB free disk** (source tree + toolchains + build output)
+- **~60 GB free disk** (source tree + toolchains + build output). Measured,
+  not estimated: a shallow (`--depth 1`) clone of just `asuswrt-merlin.ng`
+  alone is **~11 GB**; the full pinned-tag checkout plus `am-toolchains`
+  (prebuilt cross-compilers) plus build objects/output will exceed that. A
+  30 GB disk allowance is **not enough** — confirmed by attempting exactly
+  that and running out of headroom before the toolchains or build step. Use
+  a real build machine or VM with the full ~60 GB, not a constrained sandbox.
 - Decent CPU; a full HND build takes on the order of an hour on 8 cores
 
 ## Layout

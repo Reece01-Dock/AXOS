@@ -34,18 +34,27 @@ globs `*.patch` — keep filenames sortable: `0001-`, `0002-`, ...).
 
 ## Milestone 1, step 13: "one harmless, visible source-code modification"
 
-The recommended first patch — small, safe, and easy to verify on-device without
-touching networking, so a mistake here can't break connectivity:
+`0001-axos-login-title-marker.patch` is ready to use — not a suggestion, an
+actual patch: it appends " (AXOS)" to the browser tab title on the web UI
+login page (`release/src/router/www/Main_Login.asp`'s `<title>` tag). Small,
+cosmetic, and nowhere near networking/auth code, so a mistake here can't
+break connectivity.
 
-- Add an AXOS marker to the web UI login page or the `About` panel (e.g. append
-  " (AXOS)" to the firmware version string shown in
-  `router_webui`/`www/...`), **or**
-- Append a line to `/etc/motd` (or equivalent build-time template) so it shows
-  on SSH login.
+**Verified against real source**, not written speculatively: generated from
+and `git apply --check`-confirmed against an actual checkout of the pinned
+tag (`3004.388.9`, the exact ref `firmware/setup-sources.sh` fetches by
+default) — see the commit that added this patch for the session that did
+that verification. It has **not** been verified past that point: nobody has
+built it into an image or flashed it to a router yet, since that requires
+the Docker toolchain build (`firmware/build.sh`) and physical hardware,
+neither available in the environment that generated the patch.
 
-Verification: after flashing, either check the web UI login screen / About page
-for the marker, or SSH in and confirm the MOTD/banner text. Record the result
-in `docs/ROADMAP.md` (step 16) and `docs/flashing-and-recovery.md`'s flash log.
+To use it: `APPLY_PATCHES=1 ./build.sh` applies everything under this
+directory before building (see `firmware/build.sh`).
+
+Verification once flashed: load the web UI login screen and confirm the
+browser tab reads "ASUS Login (AXOS)". Record the result in
+`docs/ROADMAP.md` (step 16) and `docs/flashing-and-recovery.md`'s flash log.
 
 ## Later patches (Milestone 2+)
 

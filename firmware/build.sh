@@ -42,9 +42,10 @@ else
   echo "==> APPLY_PATCHES=0 — building unmodified upstream (Milestone 1 default)"
 fi
 
-# The HND GT-AX6000 build directory within the Merlin tree. Verify this path
-# against the checked-out tag if the build fails with "no such directory" —
-# HND source layouts have moved between SDK revisions.
+# The HND GT-AX6000 build directory within the Merlin tree. Confirmed
+# against a real checkout of the pinned tag (3004.388.9): this is the SDK
+# dir containing release/src-rt-5.04axhnd.675x/router-sysdep.gt-ax6000/ and
+# chip_profile.mak's "GT-AX6000_CHIP_PROFILE=4912" line.
 BUILD_SUBDIR="release/src-rt-5.04axhnd.675x"
 
 echo "==> Running build inside container (this can take 45-90+ minutes)"
@@ -59,14 +60,23 @@ docker run --rm \
     echo "== toolchain check =="
     ls /opt/toolchains || { echo "toolchain symlink missing/broken"; exit 1; }
     echo "== building GT-AX6000 =="
-    # The exact target name/make invocation for this model; confirm against
-    # asuswrt-merlin.ng/release/src-rt-5.04axhnd.675x/target.mak or the repo
-    # README for the correct GT-AX6000 profile before the first real run.
-    make gtax6000
+    # Target name confirmed against the upstream repo'\''s own multi-model
+    # build automation (tools/build-all: build_fw() does exactly
+    # `cd release/src-rt-5.04axhnd.675x && make "$FWMODEL"` with
+    # FWMODEL="gt-ax6000" — note the dash; "gtax6000" (no dash) is not a
+    # valid target and was an earlier, unverified guess in this script).
+    make gt-ax6000
   '
 
 echo "==> Locating build output"
-found=$(find "$MERLIN_SRC" -maxdepth 6 -iname "*GT-AX6000*" \( -iname "*.w" -o -iname "*.pkgtb" -o -iname "*.trx" \) -print -quit || true)
+# tools/build-all looks specifically in image/ and matches
+# *_nand_squashfs.pkgtb for this model (confirmed against upstream's own
+# build_fw() function) — search there first, then fall back to a broader
+# scan in case the layout differs for the pinned ref actually checked out.
+found=$(find "$MERLIN_SRC/$BUILD_SUBDIR/image" -maxdepth 1 -iname "*_nand_squashfs.pkgtb" -print -quit 2>/dev/null || true)
+if [ -z "$found" ]; then
+  found=$(find "$MERLIN_SRC" -maxdepth 6 -iname "*GT-AX6000*" \( -iname "*.w" -o -iname "*.pkgtb" -o -iname "*.trx" \) -print -quit || true)
+fi
 if [ -n "$found" ]; then
   image_name="$(basename "$found")"
   cp -v "$found" "$OUT_DIR/"

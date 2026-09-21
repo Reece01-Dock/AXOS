@@ -1,0 +1,13 @@
+diff --git a/release/src/router/www/Main_Login.asp b/release/src/router/www/Main_Login.asp
+index e7a66d605f..8686b6c9ea 100644
+--- a/release/src/router/www/Main_Login.asp
++++ b/release/src/router/www/Main_Login.asp
+@@ -10,7 +10,7 @@
+ <link rel="icon" href="images/favicon.png">
+ <script type="text/javascript" src="/js/jquery.js"></script>
+ <script type="text/javascript" src="/js/https_redirect/https_redirect.js"></script>
+-<title>ASUS Login</title>
++<title>ASUS Login (AXOS)</title>
+ <style>
+ body{
+ 	font-family: Arial, MS UI Gothic, MS P Gothic, Microsoft Yahei UI, sans-serif;

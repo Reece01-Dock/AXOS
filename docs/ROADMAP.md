@@ -21,24 +21,83 @@ until one does.
 
 The single most important milestone. No AXOS functionality before this is green.
 
-- [ ] 1. Build Asuswrt-Merlin from source for GT-AX6000 *(scripted: `firmware/`)*
-- [ ] 2. Produce a firmware image (`.w` / `.pkgtb`)
-- [ ] 3. Flash it via the stock ASUS web UI
-- [ ] 4. Router boots
-- [ ] 5. 1GbE Ethernet works
-- [ ] 6. Both 2.5GbE ports work
-- [ ] 7. 2.4 GHz Wi-Fi works
-- [ ] 8. 5 GHz Wi-Fi works
-- [ ] 9. ASUS web UI works
-- [ ] 10. SSH works
+**Hard blocker, stated plainly:** steps 3–12 and 14–16 require a physical
+GT-AX6000 — flashing it, watching it boot, confirming Wi-Fi actually
+broadcasts on both bands, checking real Ethernet link speeds, and pressing
+its physical recovery-mode button are not things any amount of code or
+sandboxed automation can substitute for. No environment this project has had
+access to so far includes one. What follows is exactly what *was* checked —
+real verification against the actual upstream source, not speculation —
+and exactly where it stops.
+
+- [ ] 1. Build Asuswrt-Merlin from source for GT-AX6000 *(scripted:
+      `firmware/`; **partially verified** — see below)*
+- [ ] 2. Produce a firmware image (`.w` / `.pkgtb`) — blocked on disk (see below)
+- [ ] 3. Flash it via the stock ASUS web UI — blocked on physical hardware
+- [ ] 4. Router boots — blocked on physical hardware
+- [ ] 5. 1GbE Ethernet works — blocked on physical hardware
+- [ ] 6. Both 2.5GbE ports work — blocked on physical hardware
+- [ ] 7. 2.4 GHz Wi-Fi works — blocked on physical hardware
+- [ ] 8. 5 GHz Wi-Fi works — blocked on physical hardware
+- [ ] 9. ASUS web UI works — blocked on physical hardware
+- [ ] 10. SSH works — blocked on physical hardware
 - [ ] 11. Recovery mode verified (bootloader rescue + firmware restoration — do this
        **before** flashing anything custom; see `docs/flashing-and-recovery.md`)
-- [ ] 12. Create and store a settings + JFFS backup
-- [ ] 13. Make one harmless, visible source modification *(procedure documented in
-       `firmware/patches/README.md`)*
-- [ ] 14. Rebuild
-- [ ] 15. Flash again
-- [ ] 16. Verify the modification is visible on the router
+       — blocked on physical hardware
+- [ ] 12. Create and store a settings + JFFS backup — blocked on physical hardware
+- [ ] 13. Make one harmless, visible source modification — **patch written and
+      verified**: `firmware/patches/0001-axos-login-title-marker.patch`
+      (adds " (AXOS)" to the web UI login page's browser-tab title),
+      generated against and `git apply --check`-confirmed on an actual
+      checkout of the pinned tag `3004.388.9`. Not yet built into an image
+      or flashed — see step 2.
+- [ ] 14. Rebuild — blocked on step 2
+- [ ] 15. Flash again — blocked on physical hardware
+- [ ] 16. Verify the modification is visible on the router — blocked on physical hardware
+
+### What was actually verified this session (real, against real upstream source)
+
+No shortcuts here — every item below was checked against a real, network-fetched
+clone of `RMerl/asuswrt-merlin.ng` (cleaned up afterward; none of this is
+committed as vendored source — see `firmware/patches/README.md` for why the
+Merlin tree itself isn't vendored into this repo):
+
+- **Network access confirmed.** `git ls-remote`/`git clone`/`git fetch` to
+  `github.com` all work from this environment (through the pre-configured
+  egress proxy) — a plain `curl` HEAD request gets blocked, but git's own
+  protocol goes through fine.
+- **Pinned tag confirmed to exist**: `3004.388.9` (resolves to commit
+  `bab3cb030c`, "Bumped revision to 3004.388.9 final").
+- **Found and fixed a real bug in `firmware/build.sh`**: the build target
+  was `make gtax6000` (no dash) — invalid. The correct target is
+  `make gt-ax6000` (confirmed two ways: `chip_profile.mak` defines
+  `GT-AX6000_CHIP_PROFILE=4912`, matched via the Makefile's
+  `$(MAKECMDGOALS)_CHIP_PROFILE` mechanism only when the goal is literally
+  `gt-ax6000`; and the upstream project's own multi-model build automation,
+  `tools/build-all`, calls exactly `cd release/src-rt-5.04axhnd.675x && make
+  "$FWMODEL"` with `FWMODEL="gt-ax6000"` for this device). Fixed in
+  `firmware/build.sh`.
+- **Confirmed the build subdirectory** (`release/src-rt-5.04axhnd.675x`) and
+  **the built-image naming pattern** (`*_nand_squashfs.pkgtb` in that
+  directory's `image/` subdir) against the same `tools/build-all` script —
+  `firmware/build.sh`'s output-detection now checks there first.
+- **Confirmed disk requirements empirically, not just estimated**: a shallow
+  clone of `asuswrt-merlin.ng` alone is ~11 GB. Combined with
+  `am-toolchains` and build output, a 30 GB disk allowance (this
+  environment's actual limit) is **not enough** to run the full build —
+  confirmed by attempting it and tracking real disk usage, not assumed.
+  `docs/build-environment.md`'s "~60 GB free disk" requirement is now a
+  measured floor, not a guess.
+- **Wrote and verified the step-13 patch** against the real pinned-tag
+  source (see step 13 above).
+
+**Not done, and not possible from this environment:** the actual Docker
+toolchain download + full build (disk budget, per above), and everything
+requiring physical hardware. The concrete next step is to run
+`firmware/setup-sources.sh && APPLY_PATCHES=1 ./firmware/build.sh` on a real
+build machine with ~60 GB free (the build-target fix above should now make
+that succeed where it would previously have failed at the `make` step
+regardless of disk), then work through steps 3–16 with the physical router.
 
 ## Milestone 2 — First AXOS control service (`axosd`) + MCP
 
