@@ -10,7 +10,7 @@ import (
 
 	"github.com/reece01-dock/axos/internal/audit"
 	"github.com/reece01-dock/axos/internal/backend"
-	"github.com/reece01-dock/axos/internal/rollback"
+	"github.com/reece01-dock/axos/internal/rollbackctl"
 )
 
 const serverVersion = "0.1.0-milestone2"
@@ -27,12 +27,18 @@ type registeredTool struct {
 	dangerous bool
 }
 
-// Server wires a RouterBackend, rollback engine, and audit logger together
-// and exposes them as MCP tools. The MCP layer owns audit logging and danger
-// enforcement so no individual backend method has to.
+// Server wires a RouterBackend, a rollback controller, and an audit logger
+// together and exposes them as MCP tools. The MCP layer owns audit logging
+// and danger enforcement so no individual backend method has to.
+//
+// Rollback is a rollbackctl.Controller, not a concrete *rollback.Engine —
+// this Server has no idea (and doesn't need one) whether it's running
+// in-process alongside the real engine (axosd's own "axosd mcp" mode) or as
+// a separate axos-mcp process talking to axosd's HTTP API. See
+// internal/rollbackctl's package doc for why that distinction matters.
 type Server struct {
 	Backend  backend.RouterBackend
-	Rollback *rollback.Engine
+	Rollback rollbackctl.Controller
 	Audit    *audit.Logger
 	// Actor identifies who is driving this server instance, for audit
 	// entries (e.g. "mcp:ai"). Defaults to "mcp:unknown" if empty.
@@ -42,7 +48,7 @@ type Server struct {
 }
 
 // NewServer builds a Server with all Milestone-2 tools registered.
-func NewServer(b backend.RouterBackend, rb *rollback.Engine, al *audit.Logger, actor string) *Server {
+func NewServer(b backend.RouterBackend, rb rollbackctl.Controller, al *audit.Logger, actor string) *Server {
 	if actor == "" {
 		actor = "mcp:unknown"
 	}
@@ -168,7 +174,15 @@ func (s *Server) callTool(ctx context.Context, base Response, p ToolCallParams) 
 	argsForAudit := rawArgsToMap(p.Arguments)
 
 	if rt.dangerous {
-		st := s.Rollback.Status()
+		st, err := s.Rollback.Status(ctx)
+		if err != nil {
+			// Fail safe: if we can't even verify whether a rollback
+			// transaction is armed (e.g. axos-mcp can't reach axosd's
+			// API right now), refuse the dangerous action rather than
+			// guessing. See docs/mcp-api.md "Danger enforcement".
+			s.logAudit(p.Name, argsForAudit, "", fmt.Errorf("rollback_status_unavailable: %w", err))
+			return withError(base, ErrRollbackRequired, "could not verify rollback status: "+err.Error())
+		}
 		if !st.Pending {
 			s.logAudit(p.Name, argsForAudit, "", fmt.Errorf("rollback_required"))
 			return withError(base, ErrRollbackRequired, "this action requires an armed rollback transaction (call rollback.arm first)")
@@ -179,7 +193,9 @@ func (s *Server) callTool(ctx context.Context, base Response, p ToolCallParams) 
 
 	txnID := ""
 	if rt.dangerous {
-		txnID = s.Rollback.Status().ID
+		if st, err := s.Rollback.Status(ctx); err == nil {
+			txnID = st.ID
+		}
 	}
 
 	if err != nil {

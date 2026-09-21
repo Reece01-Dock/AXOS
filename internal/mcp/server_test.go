@@ -12,6 +12,7 @@ import (
 	"github.com/reece01-dock/axos/internal/audit"
 	mockbackend "github.com/reece01-dock/axos/internal/backend/mock"
 	"github.com/reece01-dock/axos/internal/rollback"
+	"github.com/reece01-dock/axos/internal/rollbackctl"
 )
 
 func newTestServer(t *testing.T) (*Server, *bytes.Buffer) {
@@ -25,7 +26,7 @@ func newTestServer(t *testing.T) (*Server, *bytes.Buffer) {
 			_ = al.Reverted("rollback", ev.Detail, ev.ID)
 		}
 	})
-	s := NewServer(b, rb, al, "test:actor")
+	s := NewServer(b, &rollbackctl.Local{Engine: rb, Backend: b}, al, "test:actor")
 	return s, &auditBuf
 }
 
@@ -206,7 +207,10 @@ func TestRollback_ExpiryRestoresViaBackend(t *testing.T) {
 		t.Fatalf("RestoredIDs = %v, want exactly one automatic restore", restored)
 	}
 
-	st := s.Rollback.Status()
+	st, err := s.Rollback.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
 	if st.Pending {
 		t.Fatalf("rollback status still pending after expiry: %+v", st)
 	}

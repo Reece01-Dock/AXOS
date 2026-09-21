@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/reece01-dock/axos/internal/rollback"
@@ -88,28 +89,19 @@ func handleRollbackArm(ctx context.Context, s *Server, raw json.RawMessage) (int
 		return nil, fmt.Errorf("timeout_seconds must be positive")
 	}
 
-	// restoreFn snapshots current config before the caller applies their
-	// change, then restores it if nobody confirms in time. We snapshot here
-	// (at arm time, before the risky change) rather than inside the closure,
-	// so the closure just replays a config.restore against a known-good id.
-	snapshot, err := s.Backend.Backup(ctx, "pre-rollback: "+a.Reason)
+	// The snapshot-then-arm composition lives in rollbackctl now (Local, or
+	// the HTTP-forwarding client talking to axosd) — this handler is just a
+	// thin JSON-args translation over whichever Controller this Server was
+	// built with. See internal/rollbackctl's package doc for why.
+	id, deadline, err := s.Rollback.Arm(ctx, a.TimeoutSeconds, a.Reason)
 	if err != nil {
-		return nil, fmt.Errorf("failed to snapshot before arming rollback: %w", err)
-	}
-
-	restore := func(rctx context.Context) error {
-		return s.Backend.Restore(rctx, snapshot.ID)
-	}
-
-	id, err := s.Rollback.Arm(a.TimeoutSeconds, a.Reason, restore)
-	if err != nil {
-		if err == rollback.ErrBusy {
+		if errors.Is(err, rollback.ErrBusy) {
 			return nil, fmt.Errorf("rollback_busy: a transaction is already armed; confirm or wait for it before arming another")
 		}
 		return nil, err
 	}
 
-	return rollbackArmResult{ID: id, Deadline: s.Rollback.Status().Deadline.Format("2006-01-02T15:04:05Z07:00")}, nil
+	return rollbackArmResult{ID: id, Deadline: deadline.Format("2006-01-02T15:04:05Z07:00")}, nil
 }
 
 type rollbackConfirmArgs struct {
@@ -124,14 +116,14 @@ func handleRollbackConfirm(ctx context.Context, s *Server, raw json.RawMessage) 
 	if a.ID == "" {
 		return nil, fmt.Errorf("id is required")
 	}
-	if err := s.Rollback.Confirm(a.ID); err != nil {
+	if err := s.Rollback.Confirm(ctx, a.ID); err != nil {
 		return nil, err
 	}
 	return map[string]string{"status": "confirmed"}, nil
 }
 
 func handleRollbackStatus(ctx context.Context, s *Server, _ json.RawMessage) (interface{}, error) {
-	return s.Rollback.Status(), nil
+	return s.Rollback.Status(ctx)
 }
 
 type configBackupArgs struct {
