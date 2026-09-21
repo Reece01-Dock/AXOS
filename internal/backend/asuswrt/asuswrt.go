@@ -36,8 +36,13 @@ type Backend struct {
 	// BackupDir is where config.backup snapshots are stored. Should be on
 	// USB storage, not internal flash (docs/architecture.md "Data placement").
 	BackupDir string
+	// Host is set when this Backend runs commands over SSH against a
+	// remote router rather than assuming it's running locally on-device
+	// ("Live Development Mode" — see WithHost). Empty means local exec.
+	Host string
 	// runner executes commands; overridable in tests to avoid touching a
-	// real router. Defaults to execRunner (os/exec).
+	// real router. Defaults to execRunner (os/exec, i.e. "running locally
+	// on the router"), or an sshRunner when WithHost is used.
 	runner commandRunner
 }
 
@@ -49,9 +54,29 @@ func WithBackupDir(dir string) Option {
 	return func(b *Backend) { b.BackupDir = dir }
 }
 
-// New returns an asuswrt Backend. It does not verify the router environment
-// (nvram/ip/wl availability) at construction time — individual calls fail
-// clearly if a required tool is missing.
+// WithHost switches this Backend from local execution to running every
+// command over SSH against host ("user@router" or a Host alias from
+// ~/.ssh/config). This is what "axosd --backend asuswrt --host <router>"
+// (Live Development Mode) means: the exact same AsuswrtBackend and the
+// exact same nvram/ip/wl/etc. commands, just run remotely — there is no
+// separate "remote asuswrt backend" implementation to keep in sync.
+//
+// extraSSHArgs are appended after the built-in defaults (BatchMode=yes,
+// connect/keepalive timeouts — see defaultSSHArgs) and can override them,
+// e.g. WithHost("router", "-i", "/path/to/key", "-p", "2222").
+func WithHost(host string, extraSSHArgs ...string) Option {
+	return func(b *Backend) {
+		b.Host = host
+		b.runner = newSSHRunner(host, extraSSHArgs...)
+	}
+}
+
+// New returns an asuswrt Backend. By default it runs commands locally
+// (assumes the calling process is running on the router itself); pass
+// WithHost to run over SSH against a remote router instead. It does not
+// verify the router environment (nvram/ip/wl availability, or SSH
+// reachability) at construction time — individual calls fail clearly if a
+// required tool is missing or the host is unreachable.
 func New(opts ...Option) (*Backend, error) {
 	b := &Backend{
 		// (verify) default USB mount label/layout on GT-AX6000; Merlin
