@@ -227,7 +227,38 @@ make[5]: *** [Kbuild:42: include/generated/timeconst.h] Error 127
 
 Plain missing package — `bc` is a standard Linux kernel build dependency
 (used to compute `include/generated/timeconst.h`) that was never in the
-Dockerfile's list. **Fixed**: added `bc`. Not yet re-verified end to end.
+Dockerfile's list. **Fixed**: added `bc`.
+
+That fix got the next attempt past the kernel build entirely and into
+router userspace — linking `libshared.so` — before a sixth bug, a
+different kind again:
+
+```
+arm-buildroot-linux-gnueabi-gcc.br_real: error: prebuild/uu_utils.o: No such file or directory
+make[5]: *** [Makefile:481: libshared.so] Error 1
+```
+
+**Traced in the real source**: `release/src/router/shared/Makefile:472`
+pulls in `prebuild/uu_utils.o` (a proprietary ASUS "UU/GearUp cloud
+plugin" binary blob, unrelated to core networking) whenever
+`RTCONFIG_UUPLUGIN` or `RTCONFIG_GEARUPPLUGIN` is `y`. Confirmed: this
+Merlin release's `release/src/router/shared/prebuild/GT-AX6000/` directory
+genuinely does not ship `uu_utils.o` (it has 16 *other* prebuilt objects —
+that one exists only for RT-AX86U/RT-AX58U/RT-AX68U/RT-AX88U/GT-AX11000).
+Also confirmed both Kconfig sources of truth
+(`release/src/router/config/config.in`, `config_base`) default this
+feature **off**, and GT-AX6000's own config fragment
+(`targets/94912GW/94912GW.GT-AX6000`) never turns it on — so something
+deeper in the generated `.config` state (not staticly traceable from the
+source alone, possibly leftover state from an earlier attempt, since the
+build tree persists across retries) is enabling a feature whose binary
+this model's source doesn't even ship.
+
+**Fixed**: `firmware/build.sh` now passes `RTCONFIG_UUPLUGIN=n
+RTCONFIG_GEARUPPLUGIN=n` as `make` command-line overrides — confirmed no
+`override` directive anywhere in the relevant Makefiles that would defeat
+this, so it reliably wins regardless of the exact root cause. Not yet
+re-verified end to end.
 
 Everything requiring physical hardware is separately blocked as before.
 The concrete next step is to run

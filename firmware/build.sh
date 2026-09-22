@@ -73,7 +73,21 @@ docker run --rm \
     # `cd release/src-rt-5.04axhnd.675x && make "$FWMODEL"` with
     # FWMODEL="gt-ax6000" — note the dash; "gtax6000" (no dash) is not a
     # valid target and was an earlier, unverified guess in this script).
-    make gt-ax6000
+    #
+    # RTCONFIG_UUPLUGIN/RTCONFIG_GEARUPPLUGIN=n: these ASUS cloud-account
+    # plugin features (unrelated to core networking) default OFF in both
+    # release/src/router/config/config.in and config_base, and GT-AX6000'\''s
+    # own config fragment (targets/94912GW/94912GW.GT-AX6000) never turns
+    # them on — yet release/src/router/shared/Makefile'\''s OBJS list still
+    # pulled in prebuild/uu_utils.o, which this Merlin release genuinely
+    # does not ship for GT-AX6000 (confirmed: prebuild/GT-AX6000/ has 16
+    # other prebuilt .o files, not this one — only present for
+    # RT-AX86U/RT-AX58U/RT-AX68U/RT-AX88U/GT-AX11000). Forcing both off on
+    # the command line (which overrides whatever internal Kconfig/.config
+    # state is otherwise enabling them) is safe regardless of the exact
+    # cause and matches what the shipped source clearly intends for this
+    # model.
+    make gt-ax6000 RTCONFIG_UUPLUGIN=n RTCONFIG_GEARUPPLUGIN=n
   '
 
 echo "==> Locating build output"
