@@ -1,12 +1,14 @@
-# Firmware build tree (multi-GB, mostly upstream — see firmware/patches/README.md)
-/firmware/src/
+# firmware/src/asuswrt-merlin.ng and firmware/src/am-toolchains are git
+# submodules (see .gitmodules) pinned to exact upstream commits — tracked
+# as gitlinks, not ignored. Their own multi-GB working-tree content only
+# exists locally after `git submodule update --init` and is managed by
+# each submodule's own .git, not this repo's ignore rules.
 /firmware/out/
 /firmware/.sources-pinned
 
 # Go
-/axosd/bin/
 *.test
-/axosd/**/*.out
+/cmd/**/*.out
 
 # Device-specific captured facts that may be sensitive (serials, keys) unless
 # explicitly reviewed and intentionally committed.

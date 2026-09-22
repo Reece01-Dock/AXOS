@@ -81,23 +81,42 @@ Merlin tree itself isn't vendored into this repo):
   **the built-image naming pattern** (`*_nand_squashfs.pkgtb` in that
   directory's `image/` subdir) against the same `tools/build-all` script —
   `firmware/build.sh`'s output-detection now checks there first.
-- **Confirmed disk requirements empirically, not just estimated**: a shallow
-  clone of `asuswrt-merlin.ng` alone is ~11 GB. Combined with
-  `am-toolchains` and build output, a 30 GB disk allowance (this
-  environment's actual limit) is **not enough** to run the full build —
-  confirmed by attempting it and tracking real disk usage, not assumed.
-  `docs/build-environment.md`'s "~60 GB free disk" requirement is now a
-  measured floor, not a guess.
+- **Measured real disk requirements** instead of guessing: `asuswrt-merlin.ng`
+  at the pinned commit is ~11 GB (shallow), `am-toolchains` at its pinned
+  commit is ~3.1 GB (shallow) — ~14 GB for source alone, both fetched for
+  real, inspected, then cleaned up locally (nothing vendored — see below).
+  That comfortably fit this environment's 30 GB disk allowance with ~16 GB
+  left over for the Docker build itself, which has *not* been attempted —
+  whether that headroom is enough for the actual build's object files and
+  output is still unverified. `docs/build-environment.md` now states ~20 GB
+  for source (measured) and ~60 GB recommended overall (build headroom,
+  still an estimate).
 - **Wrote and verified the step-13 patch** against the real pinned-tag
   source (see step 13 above).
+- **Pinned both sources as git submodules**, not left as "a script will
+  clone them": `firmware/src/asuswrt-merlin.ng` and
+  `firmware/src/am-toolchains` are gitlinks in this repo's own tree,
+  pointing at the exact verified commits above (`.gitmodules` at the repo
+  root). This is a real, visible link — GitHub renders a submodule entry as
+  a clickable jump straight to that commit on the upstream repo — not a
+  promise inside a shell script's default variable. Creating a full fork or
+  a brand-new mirror repository was attempted first and is **not possible
+  with this session's GitHub permissions** (the GitHub App installation
+  used here can modify `reece01-dock/axos` but cannot fork a
+  differently-owned repo or create new repositories — both attempts
+  returned explicit permission errors, not silently skipped). The submodule
+  pin achieves the same practical goal — an exact, GitHub-visible,
+  version-controlled reference to the real source — without needing either.
+  `firmware/setup-sources.sh` now just runs `git submodule update --init`
+  against these pins rather than maintaining its own separate clone/ref logic.
 
 **Not done, and not possible from this environment:** the actual Docker
-toolchain download + full build (disk budget, per above), and everything
+build step (disk headroom for it is unverified, per above), and everything
 requiring physical hardware. The concrete next step is to run
 `firmware/setup-sources.sh && APPLY_PATCHES=1 ./firmware/build.sh` on a real
-build machine with ~60 GB free (the build-target fix above should now make
-that succeed where it would previously have failed at the `make` step
-regardless of disk), then work through steps 3–16 with the physical router.
+build machine — the build-target fix above should now make the build itself
+succeed where it would previously have failed at the `make` step regardless
+of environment — then work through steps 3–16 with the physical router.
 
 ## Milestone 2 — First AXOS control service (`axosd`) + MCP
 

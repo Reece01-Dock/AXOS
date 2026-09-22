@@ -3,7 +3,10 @@
 Every AXOS modification to the Merlin source tree lives here as an ordered
 `git apply`-able patch, applied by `build.sh` when `APPLY_PATCHES=1`. We never
 edit `firmware/src/asuswrt-merlin.ng` and commit the tree itself — the patch
-files are the record of our diff, and `firmware/src/` stays gitignored.
+files are the record of our diff. `firmware/src/asuswrt-merlin.ng` and
+`firmware/src/am-toolchains` are git submodules (see `.gitmodules` and
+`docs/build-environment.md`) — this repo tracks exactly which upstream
+commit they're pinned to, but not their (multi-GB) content.
 
 ## Why patches instead of a vendored fork (for now)
 

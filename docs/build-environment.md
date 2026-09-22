@@ -12,58 +12,94 @@ distro and package set the Merlin HND toolchain expects.
 ## Requirements
 
 - x86_64 Linux host (or VM) with Docker
-- **~60 GB free disk** (source tree + toolchains + build output). Measured,
-  not estimated: a shallow (`--depth 1`) clone of just `asuswrt-merlin.ng`
-  alone is **~11 GB**; the full pinned-tag checkout plus `am-toolchains`
-  (prebuilt cross-compilers) plus build objects/output will exceed that. A
-  30 GB disk allowance is **not enough** — confirmed by attempting exactly
-  that and running out of headroom before the toolchains or build step. Use
-  a real build machine or VM with the full ~60 GB, not a constrained sandbox.
+- **~20 GB free disk for source alone, ~60 GB recommended overall** (source
+  tree + toolchains + build output). Measured, not estimated: a shallow
+  (`--depth 1`) checkout of `asuswrt-merlin.ng` at the pinned commit is
+  **~11 GB**, and `am-toolchains` at its pinned commit is **~3.1 GB** — so
+  source alone is ~14 GB. Add headroom for Docker image layers and the
+  actual build's object files/output (a full embedded Linux + userspace
+  build historically runs several more GB) and ~60 GB total is the safe
+  target. A 30 GB disk allowance was tight but source fetch alone fit fine
+  in one; the build step itself has not been attempted end-to-end due to
+  that remaining headroom being uncertain — see `docs/ROADMAP.md` Milestone 1.
 - Decent CPU; a full HND build takes on the order of an hour on 8 cores
 
 ## Layout
 
-Everything lives under `firmware/` and is gitignored except the scripts:
+Everything lives under `firmware/`:
 
 ```
 firmware/
 ├── docker/Dockerfile        # pinned Ubuntu build image
-├── setup-sources.sh         # clones asuswrt-merlin.ng + am-toolchains
+├── setup-sources.sh         # fetches the pinned submodules below
 ├── build.sh                 # runs the GT-AX6000 build inside the container
 ├── patches/                 # our source modifications, as git patches
-└── src/                     # (gitignored) asuswrt-merlin.ng checkout
-    └── ../am-toolchains/    # (gitignored) prebuilt toolchains
+└── src/
+    ├── go.mod               # module boundary only — see below, never built
+    ├── asuswrt-merlin.ng/   # git submodule — pinned to an exact upstream commit
+    └── am-toolchains/       # git submodule — pinned to an exact upstream commit
 ```
 
-We deliberately keep the Merlin tree as a **separate clone** (not vendored into
-this repo) for now: it is multi-GB and mostly not ours. AXOS changes to Merlin
-are maintained as patches in `firmware/patches/` applied on top of a pinned
-upstream tag. If/when our diff grows large, we switch to a proper hosted fork of
-`RMerl/asuswrt-merlin.ng` and pin a branch instead — the scripts already support
-overriding the clone URL.
+`firmware/src/go.mod` exists only so `go build/vet/test ./...` run from the
+AXOS repo root doesn't sweep in stray Go source that ships inside the
+vendored trees (e.g. `asuswrt-merlin.ng`'s `wireguard-tools/contrib/external-tests`,
+which has unmet third-party dependencies and isn't meant to build as part of
+AXOS). It marks `firmware/src/` as a separate Go module with no dependents —
+Go's `./...` pattern skips subtrees below a nested `go.mod` automatically.
+Don't remove it without re-checking `go build ./...` from the repo root.
+
+`firmware/src/asuswrt-merlin.ng` and `firmware/src/am-toolchains` are **git
+submodules** (see `.gitmodules` at the repo root), each pinned to one exact
+upstream commit — verified to actually exist and, for Merlin, to contain the
+expected GT-AX6000 build profile (`docs/ROADMAP.md` Milestone 1 has the
+specifics). This means the pin is **recorded in this repo's own git
+history** — visible and clickable on GitHub (a submodule link jumps straight
+to that exact commit on the upstream repo), diffable with normal `git log`,
+and requires no separate "trust this shell variable" step. Nothing from
+either upstream tree is vendored/copied into this repo — only the commit
+reference is, which is why cloning `axos` itself stays lightweight even
+though the pinned sources are ~14 GB once fetched.
+
+We keep this as submodule references rather than a full hosted fork for now:
+the diff we actually maintain against Merlin (`firmware/patches/`) is small.
+If/when it grows large enough that patch maintenance becomes painful, switch
+to a proper hosted fork with an `axos` branch and repoint `.gitmodules` at it.
 
 ## Usage
 
 ```sh
 cd firmware
-./setup-sources.sh            # clone sources + toolchains, pin versions
+./setup-sources.sh            # fetch the pinned submodules (git submodule update --init)
 ./build.sh                    # build docker image, run 'make gt-ax6000' inside it
 ```
 
-Output image lands in `firmware/out/` (a `GT-AX6000_*.w` / `.pkgtb` file — the
-exact artifact name/extension comes from the Merlin build; the script prints it).
+Or, from the repo root, the standard git way works too:
+`git submodule update --init --depth 1 -- firmware/src/asuswrt-merlin.ng firmware/src/am-toolchains`.
+
+Output image lands in `firmware/out/` (a `GT-AX6000_*_nand_squashfs.pkgtb`
+file — confirmed against upstream's own build automation, see
+`docs/ROADMAP.md`).
 
 ## Version pinning
 
-`setup-sources.sh` pins:
+The pin lives in this repo's git history as the submodules' gitlink commits,
+not in shell script variables. To move it:
 
-- the `asuswrt-merlin.ng` **tag/branch** (default: the current 3004.388 release
-  tag — set `MERLIN_REF` to override). Pin to a **released tag**, not `master`:
-  master may contain unreleased/broken state.
-- the `am-toolchains` commit matching that release.
+```sh
+cd firmware
+MERLIN_REF=<new-tag> ./setup-sources.sh --repin
+# review: git -C src/asuswrt-merlin.ng log -1 ; git diff --cached
+git add firmware/src/asuswrt-merlin.ng
+git commit -m "firmware: repin asuswrt-merlin.ng to <new-tag>"
+```
 
-Record the exact refs used for any image you flash in `docs/ROADMAP.md` notes or
-the flash log — reproducibility is worthless if we don't know what we built.
+Pin to a **released tag**, not a branch — `master` may contain
+unreleased/broken state. `am-toolchains` has no release tags upstream; it's
+pinned to a specific commit on `master` instead (same `--repin` mechanism,
+via `TOOLCHAINS_REF=<commit>`).
+
+The pin isn't real for anyone else until that gitlink-update commit is
+pushed — a local `--repin` alone only changes your own checkout.
 
 ## Known build facts / gotchas (HND 5.04 platform)
 
