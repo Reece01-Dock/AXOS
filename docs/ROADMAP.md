@@ -147,8 +147,26 @@ is `dash` by default — installing the `bash` package (which
 SDK's `make.common` has an explicit `prebuild_checks` target that requires
 `/bin/sh` to actually invoke bash and fails the whole build otherwise.
 **Fixed** in `firmware/docker/Dockerfile`: `RUN ln -sf /bin/bash /bin/sh`
-forces the symlink. Not yet re-verified (the user's next build attempt will
-confirm it) — recorded here as a real, confirmed bug + fix, not a guess.
+forces the symlink.
+
+That fix got the next attempt past `prebuild_checks`' shell check into its
+header/library checks, where it hit a second real bug:
+
+```
+fatal error: lzo/lzo1x.h: No such file or directory
+ERROR: lzo/lzo1x.h development library is required for build
+```
+
+**Fixed** the same way, `liblzo2-dev` added to the Dockerfile's package
+list. This time verified against the actual `prebuild_checks` target
+source (`make.common`, checked out for real in `firmware/src/`) rather than
+just the one failing header: read the whole target end to end and confirmed
+every other header/pkg-config check it makes (`uuid/uuid.h`, `pkg-config
+zlib`, `pkg-config uuid`) is already covered by packages already in the
+Dockerfile (`uuid-dev`, `zlib1g-dev`) — so this should be the last
+host-package gap in `prebuild_checks` specifically, though the checks after
+it (kernel build, per-profile object build) are a different category and
+unverified. Not yet re-verified end to end.
 
 Everything requiring physical hardware is separately blocked as before.
 The concrete next step is to run

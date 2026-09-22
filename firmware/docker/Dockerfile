@@ -10,10 +10,11 @@ RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y --no-in
     autoconf automake autopoint bash bison bzip2 ca-certificates cmake cpio \
     curl diffutils file flex g++ g++-multilib gawk gcc gcc-multilib gettext \
     git gperf groff-base intltool libattr1-dev libc6-dev:i386 libelf-dev \
-    libglib2.0-dev libgtk2.0-dev libltdl-dev libncurses5 libncurses5-dev \
-    libslang2 libssl-dev libtool libxml2-dev libxml-parser-perl make patch \
-    perl pkg-config python2 python3 python-is-python2 rsync ruby sed sudo \
-    texinfo unzip uuid-dev wget xxd zip zlib1g-dev \
+    libglib2.0-dev libgtk2.0-dev libltdl-dev liblzo2-dev libncurses5 \
+    libncurses5-dev libslang2 libssl-dev libtool libxml2-dev \
+    libxml-parser-perl make patch perl pkg-config python2 python3 \
+    python-is-python2 rsync ruby sed sudo texinfo unzip uuid-dev wget xxd \
+    zip zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # The HND build expects toolchains under /opt/toolchains; build.sh bind-mounts
