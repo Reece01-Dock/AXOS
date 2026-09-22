@@ -293,8 +293,59 @@ its consuming Makefile. Findings:
 
 **Fixed**: extended the same command-line-override approach to all six
 confirmed flags (`firmware/build.sh`) — confirmed no `override` directive
-anywhere in these Makefiles for any of them either. Not yet re-verified
-end to end.
+anywhere in these Makefiles for any of them either.
+
+That fix also hit a real snag of its own: the long explanatory comment
+added to `build.sh`'s single-quoted `bash -lc '...'` container script
+contained several raw, unescaped apostrophes instead of this file's
+established `'\''`-escape idiom — closing the quote early and splicing
+the rest into literal outer-shell syntax (quote count still balanced by
+EOF, so `bash -n` didn't catch it; the semantic grouping was just wrong).
+This is why `make` briefly appeared to run on the host instead of inside
+the container. Fixed all 8 raw apostrophes and verified properly this
+time — not just `bash -n`, but a stand-in `docker` function confirming
+the container script arrives as one clean, unmangled argument.
+
+With that actually fixed, the next attempt got past `bc`/kernel build/
+router userspace linking entirely and into a real compile failure:
+
+```
+bcm_ethswutils.c:47:10: fatal error: bcmnet.h: No such file or directory
+make[5]: *** [<builtin>: bcm_ethswutils.o] Error 1
+```
+
+**Traced to a genuine upstream Makefile bug, not a config-flag gap**:
+`bcmnet.h` exists in the pinned tree at
+`bcmdrivers/opensource/include/bcm963xx/bcmnet.h`, but
+`router-sysdep.gt-ax6000/bcm_util/Makefile` only adds that directory to
+the include path when `BCM4906_504` is set (a different Broadcom chip
+family — GT-AX6000 is chip `4912`, confirmed via
+`chip_profile.mak`/`BCM_CHIP`). Checked whether forcing `BCM4906_504=y`
+was a safe workaround first (matching the pattern of every other fix so
+far) — it is not: that variable also drives real chip-specific `#define`s
+(`-DBCM4906_504 -DSUPPORT_MLD`) consumed throughout `rc.c`, `usb.c`,
+`shared.h`, `boardapi.c`, and `broadcom.c` to select genuinely different
+hardware behavior, so forcing it on for chip 4912 hardware would risk
+silently wrong runtime behavior, not just a build fix. Every one of those
+same C-level checks already ORs `BCM4912` in alongside `BCM4906_504`
+except this one Makefile, which was simply never updated to match.
+Also checked the two other files with the identical `BCM4906_504`
+conditional pattern (`wlan/Makefile`, `wlan/nvram/Makefile`) — both are
+genuine, intentional chip-4906-specific tuning (restricting
+`WLANAPP_DIRS`, setting `WL_DEFAULT_NUM_SSID=16`), not bugs, and were
+left untouched.
+
+**Fixed as `firmware/patches/0002-gt-ax6000-bcm-util-bcmnet-include.patch`**
+— a real source patch, not a `build.sh` override, since this needed an
+actual Makefile logic change (OR in `$(filter 4912,$(BCM_CHIP))`
+alongside the existing `BCM4906_504` check) that a command-line variable
+couldn't safely express. Verified `git apply`/apply-then-revert against
+the real pinned checkout, not just `--check`. This means Milestone 1's
+"unmodified upstream" build is **not actually buildable as-is** for this
+model — `APPLY_PATCHES=1 ./build.sh` is now required, not optional (see
+`firmware/patches/README.md`). Not yet verified past `git apply --check`
++ a clean apply/revert cycle — no environment that generated this patch
+could run a full build.
 
 Everything requiring physical hardware is separately blocked as before.
 The concrete next step is to run

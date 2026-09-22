@@ -1,0 +1,42 @@
+Fix a real upstream build bug (not an AXOS feature): bcm_ethswutils.c
+needs bcmnet.h from bcmdrivers/opensource/include/bcm963xx/, but
+router-sysdep.gt-ax6000/bcm_util/Makefile only adds that include path
+when BCM4906_504 is set — a different Broadcom chip family than
+GT-AX6000's actual chip (4912, confirmed via chip_profile.mak's
+"GT-AX6000_CHIP_PROFILE=4912" and this build's own BCM_CHIP variable).
+Every other place in this codebase that branches on BCM4906_504 at the
+C level (rc.c, usb.c, shared.h, boardapi.c, broadcom.c) already ORs in
+BCM4912 alongside it — this Makefile is the one place that was missed.
+
+Confirmed via a real build attempt: without this, `make gt-ax6000` fails
+with "bcmnet.h: No such file or directory" compiling bcm_ethswutils.c.
+Verified `git apply --check` against an actual checkout of the pinned
+tag (3004.388.9).
+
+Required for GT-AX6000 to build at all — this is not optional the way
+0001's cosmetic marker is. See docs/ROADMAP.md Milestone 1 and
+firmware/patches/README.md for what "unmodified upstream" means once a
+build genuinely needs this.
+
+diff --git a/release/src-rt-5.04axhnd.675x/router-sysdep.gt-ax6000/bcm_util/Makefile b/release/src-rt-5.04axhnd.675x/router-sysdep.gt-ax6000/bcm_util/Makefile
+index 7e99865dca..e67f741c25 100755
+--- a/release/src-rt-5.04axhnd.675x/router-sysdep.gt-ax6000/bcm_util/Makefile
++++ b/release/src-rt-5.04axhnd.675x/router-sysdep.gt-ax6000/bcm_util/Makefile
+@@ -4,7 +4,16 @@ OBJS = bcm_timestamp.o bcm_ulog.o bcm_net.o bcm_fsutils.o \
+        bcm_boardutils.o bcm_ethswutils.o bcm_strutils.o
+ 
+ CFLAGS += -Werror -Wfatal-errors -Wno-stringop-truncation -I$(HND_SRC)/router-sysdep/sys_util/ -I$(HND_SRC)/userspace/public/include/linux/ -I$(HND_SRC)/userspace/public/include/
+-ifneq ($(strip $(BCM4906_504)),)
++# bcm_ethswutils.c needs bcmnet.h from bcmdrivers/opensource/include/bcm963xx/
++# regardless of chip family (it's not BCM4906-504-specific), but this
++# upstream Makefile only added that include path for BCM4906_504. The rest
++# of this codebase (rc.c, usb.c, shared.h, boardapi.c, broadcom.c) already
++# treats BCM4912 the same way it treats BCM4906_504 in every #if it
++# touches — this just extends the same recognition to this one Makefile,
++# using BCM_CHIP (release/src-rt-5.04axhnd.675x/Makefile's own exported
++# chip-profile variable, "4912" for GT-AX6000) since there's no equivalent
++# BCM4912 Make variable defined anywhere else to reuse.
++ifneq ($(strip $(BCM4906_504)$(filter 4912,$(BCM_CHIP))),)
+ CFLAGS += -I$(HND_SRC)/userspace/public/include/ -I$(HND_SRC)/bcmdrivers/opensource/include/bcm963xx/ -I$(HND_SRC)/shared/opensource/include/bcm963xx/
+ endif
+ 

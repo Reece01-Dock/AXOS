@@ -59,6 +59,26 @@ Verification once flashed: load the web UI login screen and confirm the
 browser tab reads "ASUS Login (AXOS)". Record the result in
 `docs/ROADMAP.md` (step 16) and `docs/flashing-and-recovery.md`'s flash log.
 
+## `0002`: a required build fix, not an AXOS feature
+
+`0002-gt-ax6000-bcm-util-bcmnet-include.patch` is a different kind of
+patch from `0001`: it's not an AXOS change, it's a fix for a real bug in
+this Merlin release's own `router-sysdep.gt-ax6000/bcm_util/Makefile` —
+`bcm_ethswutils.c` needs `bcmnet.h`, but the Makefile only adds that
+include path for the `BCM4906_504` chip family, not GT-AX6000's actual
+chip (`4912`), even though the rest of this codebase already treats both
+chips the same way everywhere else it matters. Without it, `make
+gt-ax6000` cannot complete at all — confirmed via a real build attempt
+that failed with `bcmnet.h: No such file or directory`, then fixed and
+`git apply --check`-verified against the pinned tag.
+
+This means **Milestone 1's "unmodified upstream" build isn't actually
+buildable as-is for this model** — `APPLY_PATCHES=1 ./build.sh` is
+required to get a working image, not optional the way `0001`'s cosmetic
+marker is. Not yet verified past `git apply --check` (no environment that
+generated this patch could complete a full build — see
+`docs/build-environment.md` and `docs/ROADMAP.md`).
+
 ## Later patches (Milestone 2+)
 
 - Install hook for `axosd` (a `services-start` addition, or an `/etc/init.d`
