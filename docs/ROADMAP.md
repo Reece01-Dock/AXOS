@@ -187,7 +187,36 @@ dirs>` instead of `<toolchain dirs>:$PATH`) — confirmed safe by checking
 `make.common`: the actual cross-compiler is always invoked via
 `$(TOOLCHAIN_TOP)/bin/$(TOOLCHAIN_PREFIX)-gcc`, a fully-qualified path,
 never a bare `gcc`/etc. resolved from `PATH`, so this reorder can't affect
-which compiler the build actually uses. Not yet re-verified end to end.
+which compiler the build actually uses.
+
+That fix got the next attempt substantially further — past `prebuild_checks`
+entirely and into the real kernel build (`olddefconfig` against the actual
+4.19 kernel tree for this profile) — before hitting a fourth real bug:
+
+```
+.../crosstools-aarch64-gcc-9.2-.../cc1: error while loading shared
+libraries: libisl.so.15: cannot open shared object file
+```
+
+**Root cause, confirmed directly against the real toolchain files**: the
+crosstools bundle their own `libisl`/`libmpc`/`libmpfr`/`libgmp`/etc. under
+each toolchain's own `lib/` dir — `libisl.so.15` genuinely exists right
+there — but `cc1`'s baked-in `RPATH` (`readelf -d cc1`) points at the
+*original build machine's* path
+(`/home/defjovi/temp3/toolchain/crosstools-.../lib`), not wherever we
+mount the toolchain, so the dynamic linker never finds it. **Fixed**: a
+static `/etc/ld.so.conf.d/am-toolchains.conf` (added in
+`firmware/docker/Dockerfile`) listing every `crosstools-*` lib dir in the
+pinned `am-toolchains` commit (enumerated directly from the real checkout,
+not guessed — includes the two gcc-5.3 toolchains' `usr/lib` layout,
+different from the rest), plus a `sudo ldconfig` re-run in
+`firmware/build.sh` right after the toolchains volume is mounted (the
+`.conf` file's paths don't exist yet at `docker build` time, only at
+`docker run` time, so the cache has to be rebuilt then, not baked into the
+image). Verified the Dockerfile itself still parses/builds correctly up to
+the same known network-blocked base-image pull from earlier entries in
+this log — the RUN steps added here have correct syntax, at minimum. Not
+yet re-verified end to end against a real build.
 
 Everything requiring physical hardware is separately blocked as before.
 The concrete next step is to run

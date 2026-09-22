@@ -59,6 +59,14 @@ docker run --rm \
     set -euo pipefail
     echo "== toolchain check =="
     ls /opt/toolchains || { echo "toolchain symlink missing/broken"; exit 1; }
+    # /etc/ld.so.conf.d/am-toolchains.conf (see Dockerfile) names the
+    # crosstools lib dirs, but they only exist now that this volume is
+    # mounted — rebuild the ldconfig cache against the real, now-present
+    # directories so cc1 and friends can find their bundled libisl/libmpc/
+    # libmpfr/libgmp (their baked-in RPATH points at the original build
+    # machine, not here — see the Dockerfile comment for the full story).
+    echo "== refreshing ldconfig cache for the mounted toolchains =="
+    sudo ldconfig
     echo "== building GT-AX6000 =="
     # Target name confirmed against the upstream repo'\''s own multi-model
     # build automation (tools/build-all: build_fw() does exactly
