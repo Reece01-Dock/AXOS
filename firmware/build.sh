@@ -82,12 +82,53 @@ docker run --rm \
     # pulled in prebuild/uu_utils.o, which this Merlin release genuinely
     # does not ship for GT-AX6000 (confirmed: prebuild/GT-AX6000/ has 16
     # other prebuilt .o files, not this one — only present for
-    # RT-AX86U/RT-AX58U/RT-AX68U/RT-AX88U/GT-AX11000). Forcing both off on
-    # the command line (which overrides whatever internal Kconfig/.config
-    # state is otherwise enabling them) is safe regardless of the exact
-    # cause and matches what the shipped source clearly intends for this
-    # model.
-    make gt-ax6000 RTCONFIG_UUPLUGIN=n RTCONFIG_GEARUPPLUGIN=n
+    # RT-AX86U/RT-AX58U/RT-AX68U/RT-AX88U/GT-AX11000).
+    #
+    # After that fix hit the exact same failure shape twice more
+    # (RTCONFIG_TPVPN pulling in prebuild/tpvpn.o), a full audit was done
+    # across every "prebuild/" directory in the tree (46 of them) rather
+    # than continuing to fix these one crash at a time — comparing
+    # GT-AX6000's file set against every sibling model's, then tracing
+    # each gap's consuming Makefile:
+    #
+    #   - RTCONFIG_TPVPN, RTCONFIG_AMAS_ADTBW, RTCONFIG_PRELINK,
+    #     RTCONFIG_BRCM_HOSTAPD: same shape as UUPLUGIN — each gates an
+    #     OBJS += prebuild/*.o in release/src/router/rc/Makefile with no
+    #     source-file fallback, each defaults off in config.in/config_base,
+    #     and GT-AX6000's own fragment never turns any of them on either.
+    #     GT-AX6000's prebuild/ is missing every one of these objects
+    #     (amas-adtbw-broadcom.o, amas_adtbw.o, amas_prelink.o,
+    #     hostapd_config.o, tpvpn.o, wps_pbcd.o) — this model's own source
+    #     release plainly never intended these built.
+    #   - RTCONFIG_RGBLED, RTCONFIG_BT_CONN: gate whole subdirectories
+    #     (aura_sw; bluez-5.56 and btconfig) that have no GT-AX6000
+    #     prebuild/ entry *at all* (unlike the others, not even a
+    #     partial/missing-file case — no per-model prebuilt anything
+    #     exists for this hardware). Both also default off with no
+    #     GT-AX6000 override, consistent with this model having neither
+    #     RGB LEDs nor a Bluetooth radio.
+    #   - dns_dpi_check.o (also missing from GT-AX6000's rc/prebuild) is
+    #     NOT a risk: confirmed via `git grep` it is not referenced by name
+    #     anywhere in the tracked source, in any Makefile or .c file — an
+    #     orphaned prebuilt artifact nothing actually consumes.
+    #   - asd2.1 (also has no GT-AX6000 prebuild/ entry) is NOT a risk
+    #     either: its own Makefile copies prebuild/$(BUILD_NAME)/* with a
+    #     leading "-" (make's ignore-errors-on-this-line prefix), so a
+    #     missing prebuilt binary there is a silent, designed-in no-op,
+    #     not a hard failure — unlike the OBJS+= pattern above.
+    #
+    # All six flags below default off in both
+    # release/src/router/config/config.in and config_base, and
+    # targets/94912GW/94912GW.GT-AX6000 never overrides any of them on —
+    # forcing them off on the command line (which wins over whatever
+    # internal Kconfig/.config state is otherwise enabling them; confirmed
+    # no `override` directive anywhere in these Makefiles that would defeat
+    # it) is safe regardless of the exact cause, and matches what the
+    # shipped source for this model clearly intends.
+    make gt-ax6000 \
+      RTCONFIG_UUPLUGIN=n RTCONFIG_GEARUPPLUGIN=n \
+      RTCONFIG_TPVPN=n RTCONFIG_AMAS_ADTBW=n RTCONFIG_PRELINK=n \
+      RTCONFIG_BRCM_HOSTAPD=n RTCONFIG_RGBLED=n RTCONFIG_BT_CONN=n
   '
 
 echo "==> Locating build output"

@@ -257,8 +257,44 @@ this model's source doesn't even ship.
 **Fixed**: `firmware/build.sh` now passes `RTCONFIG_UUPLUGIN=n
 RTCONFIG_GEARUPPLUGIN=n` as `make` command-line overrides — confirmed no
 `override` directive anywhere in the relevant Makefiles that would defeat
-this, so it reliably wins regardless of the exact root cause. Not yet
-re-verified end to end.
+this, so it reliably wins regardless of the exact root cause.
+
+That fix hit the exact same failure shape twice more (`RTCONFIG_TPVPN`
+pulling in `prebuild/tpvpn.o`), which prompted a full audit instead of
+continuing to fix these reactively one at a time: every `prebuild/`
+directory in the tree (46 of them) was enumerated, GT-AX6000's file set
+compared against every sibling model's for each, and every gap traced to
+its consuming Makefile. Findings:
+
+- **Real, fixed**: `RTCONFIG_TPVPN`, `RTCONFIG_AMAS_ADTBW`,
+  `RTCONFIG_PRELINK`, `RTCONFIG_BRCM_HOSTAPD` — same shape as UUPLUGIN
+  exactly (an unconditional `OBJS +=` in `release/src/router/rc/Makefile`
+  for a prebuilt object with no source-file fallback), all four default
+  off in `config.in`/`config_base`, GT-AX6000's own fragment
+  (`targets/94912GW/94912GW.GT-AX6000`) never overrides any of them, and
+  GT-AX6000's `prebuild/` is missing every corresponding object
+  (`amas-adtbw-broadcom.o`, `amas_adtbw.o`, `amas_prelink.o`,
+  `hostapd_config.o`, `tpvpn.o`, `wps_pbcd.o`).
+- **Real, fixed preemptively**: `RTCONFIG_RGBLED` (gates the `aura_sw`
+  subdirectory) and `RTCONFIG_BT_CONN` (gates `bluez-5.56`/`btconfig`) —
+  GT-AX6000 has no `prebuild/` entry for either *at all* (not even a
+  partial one), both default off with no GT-AX6000 override, consistent
+  with this model having neither RGB LEDs nor a Bluetooth radio. Not yet
+  hit as a live failure, but same shape as everything else that has —
+  fixed ahead of time rather than waiting for the build to reach it.
+- **Investigated, not a risk**: `dns_dpi_check.o` (also missing from
+  GT-AX6000's `rc/prebuild`) is referenced nowhere in tracked source at
+  all (`git grep` finds only the orphaned binary itself) — nothing
+  consumes it. `asd2.1` (also has no GT-AX6000 `prebuild/` entry) copies
+  its prebuilt files with a leading `-` in the Makefile recipe (make's
+  ignore-errors-on-this-line prefix) — a missing prebuilt binary there is
+  a silent, designed-in no-op, not a hard failure like the `OBJS+=`
+  pattern above.
+
+**Fixed**: extended the same command-line-override approach to all six
+confirmed flags (`firmware/build.sh`) — confirmed no `override` directive
+anywhere in these Makefiles for any of them either. Not yet re-verified
+end to end.
 
 Everything requiring physical hardware is separately blocked as before.
 The concrete next step is to run
