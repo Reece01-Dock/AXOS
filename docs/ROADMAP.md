@@ -125,6 +125,31 @@ can route around; it's a hard block on this environment. Per this
 environment's own proxy documentation, a 403/407 policy denial is
 something to report, not bypass.
 
+### First real build attempt outside this sandbox (on a real VM, real internet)
+
+The user ran `firmware/setup-sources.sh && ./firmware/build.sh` on an actual
+Ubuntu Server VM with unrestricted internet — confirming the sandbox's
+Docker Hub block above doesn't apply to a normal machine. The build got
+substantially further than anything run in this project's own sandboxed
+environment ever could: past `docker build`, past mounting the toolchains,
+into the actual HND SDK build (compiled BusyBox, ran the CFE/wireless
+firmware sysdeps copy steps for the GT-AX6000 profile), before hitting a
+real bug:
+
+```
+ERROR: /bin/sh does not invoke bash shell
+make[2]: *** [.../make.common:3450: prebuild_checks] Error 1
+```
+
+**Root cause, confirmed against the real error output**: Ubuntu's `/bin/sh`
+is `dash` by default — installing the `bash` package (which
+`firmware/docker/Dockerfile` already did) doesn't change that. The HND
+SDK's `make.common` has an explicit `prebuild_checks` target that requires
+`/bin/sh` to actually invoke bash and fails the whole build otherwise.
+**Fixed** in `firmware/docker/Dockerfile`: `RUN ln -sf /bin/bash /bin/sh`
+forces the symlink. Not yet re-verified (the user's next build attempt will
+confirm it) — recorded here as a real, confirmed bug + fix, not a guess.
+
 Everything requiring physical hardware is separately blocked as before.
 The concrete next step is to run
 `firmware/setup-sources.sh && APPLY_PATCHES=1 ./firmware/build.sh` on a
