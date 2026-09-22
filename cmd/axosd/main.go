@@ -18,7 +18,9 @@ import (
 
 	"github.com/reece01-dock/axos/internal/api"
 	"github.com/reece01-dock/axos/internal/audit"
+	"github.com/reece01-dock/axos/internal/backend"
 	"github.com/reece01-dock/axos/internal/backendselect"
+	"github.com/reece01-dock/axos/internal/footprint"
 	"github.com/reece01-dock/axos/internal/mcp"
 	"github.com/reece01-dock/axos/internal/rollback"
 	"github.com/reece01-dock/axos/internal/rollbackctl"
@@ -71,7 +73,9 @@ Common flags:
   -services-config string  Path to a JSON file registering hot-deployable
                             sibling services for axosd to supervise (optional —
                             see internal/svcconfig; empty/missing is normal)
-  -service-log-dir string   Directory for supervised services' stdout/stderr logs`)
+  -service-log-dir string   Directory for supervised services' stdout/stderr logs
+  -footprint string        Path to the append-only RAM footprint log (default
+                            "./axosd-footprint.jsonl") — see internal/footprint`)
 }
 
 func backendFlags(fs *flag.FlagSet) *backendselect.Options {
@@ -89,6 +93,7 @@ func runServe(args []string) {
 	apiAddr := fs.String("api-addr", "127.0.0.1:9090", "Address the Core API listens on")
 	servicesConfig := fs.String("services-config", "", "Path to a JSON file registering supervised sibling services (optional)")
 	serviceLogDir := fs.String("service-log-dir", "", "Directory for supervised services' logs (optional)")
+	footprintPath := fs.String("footprint", "./axosd-footprint.jsonl", "Path to the append-only RAM footprint log")
 	_ = fs.Parse(args)
 
 	be, err := backendselect.New(*beOpts)
@@ -102,8 +107,16 @@ func runServe(args []string) {
 	}
 	defer al.Close()
 
+	fp, err := footprint.Open(*footprintPath)
+	if err != nil {
+		log.Fatalf("axosd: %v", err)
+	}
+	defer fp.Close()
+	recordFootprintSnapshot(fp, be, "startup")
+
 	rb := newLoggingRollbackEngine(al)
 	server := api.NewServer(be, rb, al)
+	server.Footprint = fp
 
 	sup := supervisor.New(*serviceLogDir)
 	specs, err := svcconfig.Load(*servicesConfig)
@@ -175,6 +188,29 @@ func runMCP(args []string) {
 	if err := server.Serve(ctx, os.Stdin, os.Stdout); err != nil {
 		log.Fatalf("axosd: MCP server exited with error: %v", err)
 	}
+}
+
+// recordFootprintSnapshot measures and records one footprint.Snapshot,
+// labelling it "baseline" instead of label if this is the very first
+// snapshot this install has ever recorded (see internal/footprint's package
+// doc) — so a fresh install's first-ever axosd start captures the
+// before-any-feature baseline automatically, with no separate manual step.
+// System-wide memory (from be.Resources) is attached best-effort: a backend
+// error here shouldn't block startup or lose the process-level measurement.
+func recordFootprintSnapshot(fp *footprint.Store, be backend.RouterBackend, label string) {
+	if fp.IsEmpty() {
+		label = "baseline"
+	}
+	snap := footprint.Measure(label, "")
+	if res, err := be.Resources(context.Background()); err == nil {
+		snap.SystemTotalKB, snap.SystemUsedKB, snap.SystemFreeKB = res.MemTotalKB, res.MemUsedKB, res.MemFreeKB
+	}
+	if err := fp.Record(snap); err != nil {
+		log.Printf("axosd: WARNING: failed to record footprint snapshot: %v", err)
+		return
+	}
+	log.Printf("axosd: recorded %q footprint snapshot (process_rss=%dKB, system_used=%dKB/%dKB)",
+		label, snap.ProcessRSSKB, snap.SystemUsedKB, snap.SystemTotalKB)
 }
 
 // newLoggingRollbackEngine builds a rollback.Engine wired to record every

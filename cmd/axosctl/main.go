@@ -52,6 +52,8 @@ func main() {
 		err = cmdHistory(ctx, os.Args[2:])
 	case "restart":
 		err = cmdRestart(ctx, os.Args[2:])
+	case "footprint":
+		err = cmdFootprint(ctx, os.Args[2:])
 	case "logs":
 		err = cmdLogs(ctx, os.Args[2:])
 	case "transaction":
@@ -83,6 +85,10 @@ Router status (talks to axosd's Core API, -api flag; default http://127.0.0.1:90
   axosctl backend-info               Which backend a given --backend/--fixture/--host resolves to
   axosctl restart <service>          Restart a supervised sibling service
   axosctl logs <service> [--lines N] Tail a supervised service's log
+  axosctl footprint [show]           AXOS's own RAM usage vs. its recorded baseline
+  axosctl footprint history          Every recorded footprint snapshot, with deltas
+  axosctl footprint snapshot [--label L] [--release ID]
+                                      Force a footprint snapshot now
   axosctl transaction begin --rollback-after <seconds> [--reason ...]
   axosctl transaction confirm --id <id>
   axosctl transaction status

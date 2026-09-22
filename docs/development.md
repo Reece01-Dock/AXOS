@@ -191,7 +191,14 @@ choose which services actually need restarting for a given change.
 ```sh
 axosctl restart axos-mcp          # restart just the one affected service
 axosctl health                    # confirm everything (including it) is healthy
+axosctl footprint                 # confirm it didn't cost too much RAM either
 ```
+
+Every `axosd` restart automatically records a RAM footprint snapshot (a
+"baseline" on the very first-ever run, "startup" on each one after) — see
+`docs/ram-footprint.md`. On a device with 1GB total RAM, "healthy" and
+"didn't grow the addon's footprint more than expected" are both worth
+checking before calling a deploy done.
 
 If it's unhealthy:
 

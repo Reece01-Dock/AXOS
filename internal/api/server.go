@@ -26,6 +26,7 @@ import (
 
 	"github.com/reece01-dock/axos/internal/audit"
 	"github.com/reece01-dock/axos/internal/backend"
+	"github.com/reece01-dock/axos/internal/footprint"
 	"github.com/reece01-dock/axos/internal/rollback"
 	"github.com/reece01-dock/axos/internal/rollbackctl"
 	"github.com/reece01-dock/axos/internal/supervisor"
@@ -44,6 +45,11 @@ type Server struct {
 	// /v1/supervisor/services/* routes respond 501 rather than pretending —
 	// no service is silently faked as "running".
 	Supervisor *supervisor.Supervisor
+	// Footprint is optional (nil by default): set by cmd/axosd once it has
+	// opened its RAM footprint log (see internal/footprint). When nil, the
+	// /v1/footprint* routes respond 501, matching the Supervisor convention
+	// above.
+	Footprint *footprint.Store
 
 	local *rollbackctl.Local // reuses the same snapshot-then-arm composition Local implements
 	mux   *http.ServeMux
@@ -85,6 +91,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /v1/routes", s.handleRoutes)
 	s.mux.HandleFunc("GET /v1/backups", s.readHandler(func(ctx context.Context) (interface{}, error) { return s.Backend.ListBackups(ctx) }))
 
+	s.mux.HandleFunc("GET /v1/footprint", s.handleFootprint)
+	s.mux.HandleFunc("GET /v1/footprint/history", s.handleFootprintHistory)
+	s.mux.HandleFunc("POST /v1/footprint/snapshot", s.handleFootprintSnapshot)
+
 	s.mux.HandleFunc("POST /v1/shell_exec", s.handleShellExec)
 	s.mux.HandleFunc("POST /v1/backup", s.handleBackup)
 	s.mux.HandleFunc("POST /v1/restore", s.handleRestore)
@@ -110,6 +120,14 @@ func (s *Server) routes() {
 func (s *Server) requireSupervisor(w http.ResponseWriter) bool {
 	if s.Supervisor == nil {
 		writeError(w, http.StatusNotImplemented, fmt.Errorf("this axosd instance has no supervised services configured"))
+		return false
+	}
+	return true
+}
+
+func (s *Server) requireFootprint(w http.ResponseWriter) bool {
+	if s.Footprint == nil {
+		writeError(w, http.StatusNotImplemented, fmt.Errorf("this axosd instance has no footprint log configured"))
 		return false
 	}
 	return true
@@ -322,6 +340,76 @@ func readJSON(r *http.Request, dst interface{}) error {
 		return fmt.Errorf("invalid JSON body: %w", err)
 	}
 	return nil
+}
+
+// --- Footprint (AXOS's own RAM usage over time) ------------------------
+
+// footprintResponse pairs a fresh live measurement with the install's
+// baseline, so a caller can see the growth delta without a second request.
+type footprintResponse struct {
+	Current  footprint.Snapshot  `json:"current"`
+	Baseline *footprint.Snapshot `json:"baseline,omitempty"`
+}
+
+// withSystemMemory attaches the router's current whole-system memory
+// figures to snap, best-effort: a Resources() failure just leaves them
+// zero rather than failing the footprint measurement itself, since the
+// process-level numbers are the ones that actually matter here.
+func (s *Server) withSystemMemory(ctx context.Context, snap footprint.Snapshot) footprint.Snapshot {
+	if res, err := s.Backend.Resources(ctx); err == nil {
+		snap.SystemTotalKB, snap.SystemUsedKB, snap.SystemFreeKB = res.MemTotalKB, res.MemUsedKB, res.MemFreeKB
+	}
+	return snap
+}
+
+func (s *Server) handleFootprint(w http.ResponseWriter, r *http.Request) {
+	if !s.requireFootprint(w) {
+		return
+	}
+	resp := footprintResponse{Current: s.withSystemMemory(r.Context(), footprint.Measure("live", ""))}
+	if base, ok, err := s.Footprint.Baseline(); err == nil && ok {
+		resp.Baseline = &base
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) handleFootprintHistory(w http.ResponseWriter, r *http.Request) {
+	if !s.requireFootprint(w) {
+		return
+	}
+	hist, err := s.Footprint.History()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, hist)
+}
+
+type footprintSnapshotRequest struct {
+	Label     string `json:"label"`
+	ReleaseID string `json:"release_id"`
+}
+
+func (s *Server) handleFootprintSnapshot(w http.ResponseWriter, r *http.Request) {
+	if !s.requireFootprint(w) {
+		return
+	}
+	var req footprintSnapshotRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if req.Label == "" {
+		req.Label = "manual"
+	}
+	snap := s.withSystemMemory(r.Context(), footprint.Measure(req.Label, req.ReleaseID))
+	err := s.Footprint.Record(snap)
+	s.audit(s.actor(r), "footprint.snapshot", map[string]interface{}{"label": req.Label, "release_id": req.ReleaseID}, "", err)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, snap)
 }
 
 // --- Supervisor (hot-deployable sibling services) ---------------------

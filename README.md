@@ -13,7 +13,7 @@ connectivity.
 
 | Path | Purpose |
 |---|---|
-| `docs/` | Roadmap, architecture, hot-deploy dev workflow, build guide, flashing & recovery, MCP API, safety design, security model |
+| `docs/` | Roadmap, architecture, hot-deploy dev workflow, build guide, flashing & recovery, MCP API, safety design, security model, RAM footprint tracking |
 | `firmware/` | Reproducible Merlin build environment (Docker), source fetch + build scripts, patches |
 | `cmd/axosd/` | Core service daemon: owns the RouterBackend, rollback engine, and audit log; exposes them via `serve` (HTTP Core API — the normal way to run it) or `mcp` (single-process MCP, no separate axos-mcp needed) |
 | `cmd/axos-mcp/` | MCP frontend as an **independent process** — a thin client of axosd's Core API, restartable without touching axosd's state (armed rollback timers, audit log) |
