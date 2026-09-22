@@ -111,12 +111,28 @@ Merlin tree itself isn't vendored into this repo):
   against these pins rather than maintaining its own separate clone/ref logic.
 
 **Not done, and not possible from this environment:** the actual Docker
-build step (disk headroom for it is unverified, per above), and everything
-requiring physical hardware. The concrete next step is to run
-`firmware/setup-sources.sh && APPLY_PATCHES=1 ./firmware/build.sh` on a real
-build machine — the build-target fix above should now make the build itself
-succeed where it would previously have failed at the `make` step regardless
-of environment — then work through steps 3–16 with the physical router.
+build step — and now confirmed *why*, not just "disk headroom is
+unverified": this session's network egress policy blocks
+`production.cloudfront.docker.com`, the CDN Docker Hub redirects to for
+actual image layer blobs. `docker pull ubuntu:20.04` (the very first line
+of `build.sh`, before anything AXOS-specific even runs) fails with a 403.
+Confirmed twice — once via a direct `dockerd` (no proxy env vars, got a
+403 straight from CloudFront) and once with `dockerd` explicitly pointed
+at this session's egress proxy (the proxy's own status log recorded
+`connect_rejected ... policy denial` for that exact host) — so this isn't
+a retry-able transient failure or something a Dockerfile/build.sh change
+can route around; it's a hard block on this environment. Per this
+environment's own proxy documentation, a 403/407 policy denial is
+something to report, not bypass.
+
+Everything requiring physical hardware is separately blocked as before.
+The concrete next step is to run
+`firmware/setup-sources.sh && APPLY_PATCHES=1 ./firmware/build.sh` on a
+**real machine outside this sandbox** (a Linux box or VM with normal,
+unrestricted internet access — the disk-space math above still applies:
+~20GB for source, ~60GB recommended overall) — the build-target fix above
+should make the build itself succeed once it can actually pull its base
+image, then work through steps 3–16 with the physical router.
 
 ## Milestone 2 — First AXOS control service (`axosd`) + MCP
 
