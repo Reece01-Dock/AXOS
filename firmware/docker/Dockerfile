@@ -7,8 +7,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Package set per the Asuswrt-Merlin build documentation (superset is fine).
 RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y --no-install-recommends \
-    autoconf automake autopoint bash bison bzip2 ca-certificates cmake cpio \
-    curl diffutils file flex g++ g++-multilib gawk gcc gcc-multilib gettext \
+    autoconf automake autopoint bash bc bison bzip2 ca-certificates cmake \
+    cpio curl diffutils file flex g++ g++-multilib gawk gcc gcc-multilib gettext \
     git gperf groff-base intltool libattr1-dev libc6-dev:i386 libelf-dev \
     libglib2.0-dev libgtk2.0-dev libltdl-dev liblzo2-dev libncurses5 \
     libncurses5-dev libslang2 libssl-dev libtool libxml2-dev \

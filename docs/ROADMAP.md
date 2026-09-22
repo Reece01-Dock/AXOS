@@ -215,8 +215,19 @@ different from the rest), plus a `sudo ldconfig` re-run in
 `docker run` time, so the cache has to be rebuilt then, not baked into the
 image). Verified the Dockerfile itself still parses/builds correctly up to
 the same known network-blocked base-image pull from earlier entries in
-this log — the RUN steps added here have correct syntax, at minimum. Not
-yet re-verified end to end against a real build.
+this log — the RUN steps added here have correct syntax, at minimum.
+
+That fix got the next attempt into the real kernel build proper (HOSTCC of
+kernel build scripts, `kernel/bounds.s`) before a fifth, much simpler bug:
+
+```
+/bin/sh: bc: command not found
+make[5]: *** [Kbuild:42: include/generated/timeconst.h] Error 127
+```
+
+Plain missing package — `bc` is a standard Linux kernel build dependency
+(used to compute `include/generated/timeconst.h`) that was never in the
+Dockerfile's list. **Fixed**: added `bc`. Not yet re-verified end to end.
 
 Everything requiring physical hardware is separately blocked as before.
 The concrete next step is to run
