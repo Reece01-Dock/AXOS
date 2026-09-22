@@ -166,7 +166,28 @@ zlib`, `pkg-config uuid`) is already covered by packages already in the
 Dockerfile (`uuid-dev`, `zlib1g-dev`) — so this should be the last
 host-package gap in `prebuild_checks` specifically, though the checks after
 it (kernel build, per-profile object build) are a different category and
-unverified. Not yet re-verified end to end.
+unverified.
+
+That fix revealed a third, different-*kind* of bug on the next attempt:
+
+```
+Package zlib was not found in the pkg-config search path.
+ERROR: pkg-config zlib failed
+```
+
+— despite `zlib1g-dev` being installed. **Root cause wasn't a missing
+package at all**: `firmware/docker/Dockerfile` put the cross-toolchain's
+`usr/bin` directories ahead of system `PATH`, and both toolchains bundle
+their *own* `pkg-config` binary (confirmed directly:
+`crosstools-{aarch64,arm}-gcc-5.5-.../usr/bin/pkg-config` both exist) —
+scoped to their own sysroot, so `pkg-config --exists zlib` was silently
+running the wrong binary and never saw the system's zlib.pc. **Fixed** by
+reordering `PATH` so system tools resolve first (`$PATH:<toolchain
+dirs>` instead of `<toolchain dirs>:$PATH`) — confirmed safe by checking
+`make.common`: the actual cross-compiler is always invoked via
+`$(TOOLCHAIN_TOP)/bin/$(TOOLCHAIN_PREFIX)-gcc`, a fully-qualified path,
+never a bare `gcc`/etc. resolved from `PATH`, so this reorder can't affect
+which compiler the build actually uses. Not yet re-verified end to end.
 
 Everything requiring physical hardware is separately blocked as before.
 The concrete next step is to run

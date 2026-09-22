@@ -34,7 +34,18 @@ RUN useradd -m -s /bin/bash builder && echo 'builder ALL=(ALL) NOPASSWD:ALL' >> 
 USER builder
 WORKDIR /build
 
+# System tools MUST come before the toolchain dirs in PATH: the crosstools
+# bundle their own pkg-config (and possibly automake/autoconf/libtoolize),
+# scoped to their own sysroot — with the toolchain dirs first, prebuild_checks'
+# `pkg-config --exists zlib` silently resolves to that shadowed pkg-config
+# instead of the system one, and fails even though zlib1g-dev is installed
+# (confirmed: both crosstools-*-gcc-5.5-.../{usr/,}bin/ contain their own
+# pkg-config binary). This is safe: the actual cross-compiler is always
+# invoked via TOOLCHAIN_TOP/CROSS_COMPILE's fully-qualified path
+# ($(TOOLCHAIN_TOP)/bin/$(TOOLCHAIN_PREFIX)-gcc in make.common), never a
+# bare `gcc`/etc. resolved from PATH, so PATH order doesn't affect which
+# compiler actually gets used.
 ENV LC_ALL=C \
-    PATH=/opt/toolchains/crosstools-aarch64-gcc-5.5-linux-4.1-glibc-2.26-binutils-2.28.1/usr/bin:/opt/toolchains/crosstools-arm-gcc-5.5-linux-4.1-glibc-2.26-binutils-2.28.1/usr/bin:$PATH
+    PATH=$PATH:/opt/toolchains/crosstools-aarch64-gcc-5.5-linux-4.1-glibc-2.26-binutils-2.28.1/usr/bin:/opt/toolchains/crosstools-arm-gcc-5.5-linux-4.1-glibc-2.26-binutils-2.28.1/usr/bin
 
 CMD ["/bin/bash"]
