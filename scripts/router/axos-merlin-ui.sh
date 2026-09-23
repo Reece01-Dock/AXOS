@@ -72,7 +72,7 @@ if [ -f "$TEMPLATE" ]; then
   gen_page "Main_GameServer_Content.asp" "all" "Control" \
     "Full AXOS control panel (Administration)."
   gen_page "Advanced_VPN_PPTP.asp" "vpn" "VPN" \
-    "AXOS VPN profiles, Director policy, and endpoint ping — next to Merlin VPN."
+    "Route LAN clients through a VPN tunnel (same engine as Merlin VPN Director). Pick an interface, tick clients, then Apply. Optional groups remember a set of devices."
   gen_page "Advanced_APPList_Content.asp" "lan" "LAN" \
     "AXOS DHCP reservations and clients — next to Merlin LAN/DHCP."
   gen_page "WAN_info.asp" "dns" "DNS" \

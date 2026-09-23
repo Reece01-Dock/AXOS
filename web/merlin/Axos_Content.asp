@@ -61,16 +61,15 @@ function initial(){
 					<td bgcolor="#4D595D" valign="top">
 						<div class="formfonttitle">AXOS - __AXOS_TITLE__</div>
 						<div style="margin:10px 0 10px 5px;" class="splitLine"></div>
-						<div class="formfontdesc">
+						<div class="formfontdesc" id="axos-page-desc">
 							__AXOS_DESC__
-							Same Core API as MCP / CLI · hot from JFFS · no firmware flash.
 						</div>
 
 						<div id="axos-root">
 							<div class="axos-toolbar">
 								<input type="button" class="button_gen" id="axos-refresh" value="Refresh">
 								<span id="axos-status" class="axos-status">connecting...</span>
-								<a id="axos-full-link" class="hint" href="/Main_GameServer_Content.asp" style="display:none">Full AXOS panel</a>
+								<a id="axos-full-link" href="/Main_GameServer_Content.asp" style="display:none">Full AXOS panel</a>
 							</div>
 
 							<table data-axos="system" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
@@ -151,91 +150,92 @@ function initial(){
 								<tbody id="axos-clients-body"></tbody>
 							</table>
 
-							<table data-axos="vpn" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
-								<thead><tr><td colspan="5">VPN profiles</td></tr>
-								<tr><th>Name</th><th>Type</th><th>Endpoint</th><th>Enabled</th><th></th></tr></thead>
-								<tbody id="axos-vpn-body"></tbody>
-							</table>
+							<!-- ===== VPN (Merlin VPN Director–style) ===== -->
+							<div data-axos="vpn" class="axos-table">
+								<div id="axos-vpn-status" class="axos-vpn-status"></div>
 
-							<table data-axos="vpn" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
-								<thead><tr><td colspan="2">Client VPN routing</td></tr></thead>
-								<tbody>
-									<tr>
-										<th>Tunnel</th>
-										<td>
-											<select id="axos-steer-iface" class="input_option">
-												<option value="WAN">WAN (no VPN)</option>
-											</select>
-											<span class="hint">Cloudflare WARP = your WireGuard slot (e.g. WGC5)</span>
-										</td>
-									</tr>
-									<tr>
-										<th>Group</th>
-										<td>
-											<select id="axos-group-sel" class="input_option">
-												<option value="">— none —</option>
-											</select>
-											<input type="text" id="axos-group-name" placeholder="new group name" class="input_15_table" />
-											<input type="button" class="button_gen" id="axos-group-save" value="Save selection as group">
-											<input type="button" class="button_gen" id="axos-group-load" value="Select group">
-											<input type="button" class="button_gen" id="axos-group-del" value="Delete group">
-										</td>
-									</tr>
-									<tr>
-										<th>Apply</th>
-										<td>
-											<input type="button" class="button_gen" id="axos-steer-vpn" value="Send selected → tunnel">
-											<input type="button" class="button_gen" id="axos-steer-wan" value="Send selected → WAN">
-											<input type="button" class="button_gen" id="axos-steer-all" value="Select all">
-											<input type="button" class="button_gen" id="axos-steer-none" value="Clear">
-											<span id="axos-steer-status" class="hint"></span>
-										</td>
-									</tr>
-								</tbody>
-							</table>
+								<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
+									<thead><tr><td colspan="2">Rule</td></tr></thead>
+									<tbody>
+										<tr>
+											<th width="30%">Interface</th>
+											<td>
+												<select id="axos-steer-iface" class="input_option"></select>
+											</td>
+										</tr>
+										<tr>
+											<th>Description</th>
+											<td>
+												<input type="text" id="axos-steer-desc" maxlength="32" class="input_25_table" value="axos" />
+											</td>
+										</tr>
+										<tr>
+											<th>Client group</th>
+											<td>
+												<select id="axos-group-sel" class="input_option">
+													<option value="">All clients</option>
+												</select>
+												<input type="text" id="axos-group-name" maxlength="24" class="input_15_table" placeholder="name" />
+												<input type="button" class="button_gen" id="axos-group-save" value="Save">
+												<input type="button" class="button_gen" id="axos-group-del" value="Delete">
+											</td>
+										</tr>
+									</tbody>
+								</table>
 
-							<table data-axos="vpn" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
-								<thead><tr><td colspan="5">Clients (pick who uses the tunnel)</td></tr>
-								<tr>
-									<th></th><th>Hostname</th><th>IP</th><th>MAC</th><th>Current route</th>
-								</tr>
-								</thead>
-								<tbody id="axos-steer-body"></tbody>
-							</table>
+								<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" class="FormTable_table" style="margin-top:12px;">
+									<thead>
+										<tr><td colspan="6">LAN clients — tick who should use the interface above</td></tr>
+										<tr>
+											<th width="8%"><input type="checkbox" id="axos-steer-allcb" title="Select all"></th>
+											<th width="28%">Client name</th>
+											<th width="18%">IP</th>
+											<th width="22%">MAC</th>
+											<th width="14%">Iface</th>
+											<th width="10%">Tunnel</th>
+										</tr>
+									</thead>
+									<tbody id="axos-steer-body"></tbody>
+								</table>
 
-							<table data-axos="vpn" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
-								<thead><tr><td colspan="2">VPN endpoint ping</td></tr></thead>
-								<tbody>
-									<tr>
-										<th>Hosts</th>
-										<td>
-											<input type="text" id="axos-ep-hosts" class="input_32_table" style="width:360px"
-												value="1.1.1.1 8.8.8.8 9.9.9.9" />
-											<input type="button" class="button_gen" id="axos-ep-ping" value="Rank by ping">
-											<span class="hint">space-separated</span>
-										</td>
-									</tr>
-									<tr><th>Result</th><td><pre id="axos-ep-out" class="axos-pre">-</pre></td></tr>
-								</tbody>
-							</table>
+								<div class="apply_gen">
+									<input type="button" class="button_gen" id="axos-steer-apply" value="Apply">
+									<span id="axos-steer-status" class="hint" style="display:block;margin-top:8px;"></span>
+								</div>
 
-							<table data-axos="vpn" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
-								<thead><tr><td colspan="6">VPN Director (policy)</td></tr>
-								<tr><th>ID</th><th>Source</th><th>Interface</th><th>Enabled</th><th>Desc</th><th></th></tr></thead>
-								<tbody id="axos-policy-body"></tbody>
-								<tbody>
-									<tr>
-										<th>Add</th>
-										<td colspan="5">
-											<input type="text" id="axos-pol-src" placeholder="MAC / IP / CIDR" class="input_20_table" />
-											<input type="text" id="axos-pol-if" placeholder="wan / wgc1 / ovpnc1" class="input_15_table" />
-											<input type="text" id="axos-pol-desc" placeholder="description" class="input_15_table" />
-											<label><input type="checkbox" id="axos-pol-en" checked> enabled</label>
-											<input type="button" class="button_gen" id="axos-pol-add" value="Add">
-										</td>
-									</tr>
-								</tbody>
-							</table>
+								<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" class="FormTable_table" style="margin-top:18px;">
+									<thead>
+										<tr><td colspan="5">Active Director rules</td></tr>
+										<tr>
+											<th width="10%">Enable</th>
+											<th width="28%">Description</th>
+											<th width="28%">Local</th>
+											<th width="18%">Iface</th>
+											<th width="16%">Edit</th>
+										</tr>
+									</thead>
+									<tbody id="axos-policy-body"></tbody>
+								</table>
+
+								<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable" style="margin-top:18px;">
+									<thead><tr><td colspan="2">VPN clients (start / stop)</td></tr></thead>
+									<tbody id="axos-vpn-body"></tbody>
+								</table>
+
+								<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable" style="margin-top:12px;">
+									<thead><tr><td colspan="2">Endpoint latency (optional)</td></tr></thead>
+									<tbody>
+										<tr>
+											<th>Hosts</th>
+											<td>
+												<input type="text" id="axos-ep-hosts" class="input_32_table" style="width:280px" value="1.1.1.1 8.8.8.8" />
+												<input type="button" class="button_gen" id="axos-ep-ping" value="Ping">
+											</td>
+										</tr>
+										<tr><th>Result</th><td><pre id="axos-ep-out" class="axos-pre">-</pre></td></tr>
+									</tbody>
+								</table>
+							</div>
 
 							<table data-axos="firewall" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="3">Firewall (filter, first 25)</td></tr>

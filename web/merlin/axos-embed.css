@@ -1,26 +1,40 @@
-/* AXOS Merlin control panel - hot-deployed via JFFS bind-mount. */
-#axos-root { margin: 4px 2px 20px; }
+/* AXOS Merlin control panel — stay close to stock form_style.css */
+#axos-root { margin: 0 0 12px; }
 .axos-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 0 0 14px 2px;
+  margin: 0 0 10px 2px;
+  font-size: 12px;
 }
-.axos-status { color: #ffcc66; font-family: Arial, Helvetica, sans-serif; font-size: 12px; }
+.axos-status { color: #ffcc66; font-family: Arial, Helvetica, sans-serif; font-size: 12px; margin-left: 10px; }
 .axos-status.ok { color: #7dffb3; }
 .axos-table { margin-bottom: 14px !important; }
+.axos-table.axos-hidden,
+[data-axos].axos-hidden { display: none !important; }
 .axos-pre {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 240px;
+  max-height: 180px;
   overflow: auto;
   font-family: "Lucida Console", "Courier New", monospace;
   font-size: 11px;
   color: #dce6ea;
+  text-align: left;
 }
-.hint { color: #9ab; font-size: 11px; margin-left: 8px; }
+.hint { color: #FFCC00; font-size: 11px; margin-left: 8px; }
 .axos-actions input.button_gen { margin-right: 4px; }
-.axos-table.axos-hidden { display: none !important; }
-#axos-full-link { margin-left: auto; color: #9cf; text-decoration: underline; }
-
+#axos-full-link { margin-left: 12px; color: #FFCC00; text-decoration: underline; font-size: 12px; }
+.axos-vpn-status {
+  margin: 0 0 12px 2px;
+  color: #FFF;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.axos-vpn-status p { margin: 0; }
+.axos-vpn-status b { color: #FC0; }
+/* FormTable_table body cells: left-align client names like Merlin lists */
+#axos-steer-body td:nth-child(2),
+#axos-policy-body td:nth-child(2),
+#axos-policy-body td:nth-child(3) {
+  text-align: left;
+  padding-left: 8px;
+}

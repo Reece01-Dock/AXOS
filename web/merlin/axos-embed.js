@@ -118,14 +118,14 @@
 
   function applySection() {
     var section = (global.AXOS_SECTION || "all").toLowerCase();
-    if (section === "__axos_section__") section = "all"; // unsubstituted template
+    if (section === "__axos_section__") section = "all";
     var want = SECTION_PANELS[section];
-    var tables = document.querySelectorAll("#axos-root table.axos-table[data-axos]");
-    for (var i = 0; i < tables.length; i++) {
-      var key = tables[i].getAttribute("data-axos");
+    var nodes = document.querySelectorAll("#axos-root [data-axos]");
+    for (var i = 0; i < nodes.length; i++) {
+      var key = nodes[i].getAttribute("data-axos");
       var show = !want || ("," + want + ",").indexOf("," + key + ",") >= 0;
-      if (show) tables[i].classList.remove("axos-hidden");
-      else tables[i].classList.add("axos-hidden");
+      if (show) nodes[i].classList.remove("axos-hidden");
+      else nodes[i].classList.add("axos-hidden");
     }
     var full = document.getElementById("axos-full-link");
     if (full) {
@@ -202,26 +202,35 @@
   function renderVpn(profiles) {
     var html = "";
     (profiles || []).forEach(function (p) {
+      var state = p.enabled
+        ? '<span style="color:#7dffb3">Connected</span>'
+        : '<span style="color:#ffcc66">Down</span>';
       html +=
-        "<tr><td>" +
+        "<tr><th>" +
+        esc(directorIface(p.name)) +
+        (p.description ? " <span class='hint'>" + esc(p.description) + "</span>" : "") +
+        "</th><td>" +
+        state +
+        ' &nbsp; <input type="button" class="button_gen axos-vpn-up" data-name="' +
         esc(p.name) +
-        "</td><td>" +
-        esc(p.type) +
-        "</td><td>" +
-        esc(p.endpoint || p.description || "-") +
-        "</td><td>" +
-        (p.enabled ? "yes" : "no") +
-        '</td><td class="axos-actions">' +
-        '<input type="button" class="button_gen axos-vpn-up" data-name="' +
-        esc(p.name) +
-        '" value="Up"> ' +
+        '" value="Connect"> ' +
         '<input type="button" class="button_gen axos-vpn-down" data-name="' +
         esc(p.name) +
-        '" value="Down">' +
-        "</td></tr>";
+        '" value="Disconnect"></td></tr>';
     });
-    document.getElementById("axos-vpn-body").innerHTML =
-      html || "<tr><td colspan='5'>No profiles</td></tr>";
+    var body = document.getElementById("axos-vpn-body");
+    if (body) body.innerHTML = html || "<tr><td colspan='2'>No VPN client slots</td></tr>";
+
+    var st = document.getElementById("axos-vpn-status");
+    if (st) {
+      var up = (profiles || []).filter(function (p) { return p.enabled; });
+      st.innerHTML =
+        up.length === 0
+          ? "<p>No VPN tunnel is up. Connect a client below first (Cloudflare WARP is usually a WireGuard slot such as WGC5).</p>"
+          : "<p>Active tunnel(s): <b>" +
+            up.map(function (p) { return esc(directorIface(p.name)); }).join(", ") +
+            "</b></p>";
+    }
     fillSteerIface(profiles);
   }
 
@@ -241,15 +250,26 @@
   function fillSteerIface(profiles) {
     var sel = document.getElementById("axos-steer-iface");
     if (!sel) return;
-    var cur = sel.value || "WAN";
-    var opts = '<option value="WAN">WAN (no VPN)</option>';
+    var cur = sel.value;
+    var opts = '<option value="WAN">WAN</option>';
     (profiles || []).forEach(function (p) {
       var v = directorIface(p.name);
-      var label = v + (p.description ? " - " + p.description : "") + (p.type ? " [" + p.type + "]" : "");
+      var label = v;
+      if (p.description) label += " - " + p.description;
+      if (p.type === "wireguard") label += " (WireGuard)";
+      if (p.type === "openvpn") label += " (OpenVPN)";
       opts += '<option value="' + esc(v) + '">' + esc(label) + "</option>";
     });
     sel.innerHTML = opts;
-    if (cur) sel.value = cur;
+    if (cur && sel.querySelector('option[value="' + cur + '"]')) sel.value = cur;
+    else {
+      for (var i = 0; i < (profiles || []).length; i++) {
+        if (profiles[i].type === "wireguard") {
+          sel.value = directorIface(profiles[i].name);
+          break;
+        }
+      }
+    }
   }
 
   function policyForClient(c) {
@@ -270,39 +290,28 @@
     var html = "";
     steerClients.forEach(function (c, idx) {
       var pol = policyForClient(c);
-      var route = pol ? pol.interface + (pol.enabled === false ? " (off)" : "") : "WAN (default)";
+      var iface = pol && pol.enabled !== false ? pol.interface : "WAN";
+      var onVpn = iface && String(iface).toUpperCase() !== "WAN";
       html +=
-        "<tr><td><input type='checkbox' class='axos-steer-cb' data-idx='" +
-        idx +
-        "' data-mac='" +
-        esc(c.mac) +
-        "'></td><td>" +
-        esc(c.hostname || "-") +
-        "</td><td>" +
-        esc(c.ip || "-") +
-        "</td><td>" +
-        esc(c.mac || "-") +
-        "</td><td>" +
-        esc(route) +
-        "</td></tr>";
+        "<tr>" +
+        "<td><input type='checkbox' class='axos-steer-cb' data-idx='" + idx + "' data-mac='" + esc(c.mac) + "'></td>" +
+        "<td>" + esc(c.hostname || c.mac || "?") + "</td>" +
+        "<td>" + esc(c.ip || "-") + "</td>" +
+        "<td>" + esc(c.mac || "-") + "</td>" +
+        "<td>" + esc(c.interface || "-") + "</td>" +
+        "<td>" + (onVpn ? "<span style='color:#FC0'>" + esc(iface) + "</span>" : "WAN") + "</td>" +
+        "</tr>";
     });
-    body.innerHTML = html || "<tr><td colspan='5'>No clients</td></tr>";
+    body.innerHTML = html || "<tr><td colspan='6'>No clients found</td></tr>";
   }
 
   function fillGroupSel() {
     var sel = document.getElementById("axos-group-sel");
     if (!sel) return;
     var cur = sel.value;
-    var opts = '<option value="">- none -</option>';
+    var opts = '<option value="">All clients</option>';
     steerGroups.forEach(function (g) {
-      opts +=
-        '<option value="' +
-        esc(g.id) +
-        '">' +
-        esc(g.name) +
-        " (" +
-        (g.members || []).length +
-        ")</option>";
+      opts += '<option value="' + esc(g.id) + '">' + esc(g.name) + " (" + (g.members || []).length + ")</option>";
     });
     sel.innerHTML = opts;
     if (cur) sel.value = cur;
@@ -320,24 +329,24 @@
 
   function setSteerChecks(macs) {
     var want = {};
-    (macs || []).forEach(function (m) {
-      want[String(m).toLowerCase()] = true;
-    });
+    (macs || []).forEach(function (m) { want[String(m).toLowerCase()] = true; });
     var boxes = document.querySelectorAll(".axos-steer-cb");
     for (var i = 0; i < boxes.length; i++) {
       var m = (boxes[i].getAttribute("data-mac") || "").toLowerCase();
-      boxes[i].checked = !!want[m];
+      boxes[i].checked = macs && macs.length ? !!want[m] : false;
     }
+    var all = document.getElementById("axos-steer-allcb");
+    if (all) all.checked = false;
   }
 
   function applySteer(iface, desc) {
     var macs = selectedMACs();
     var st = document.getElementById("axos-steer-status");
     if (!macs.length) {
-      alert("Select at least one client");
+      alert("Select at least one client in the list.");
       return;
     }
-    if (st) st.textContent = "applying " + macs.length + "...";
+    if (st) st.textContent = "Applying...";
     withRollback("merlin-ui-steer", function () {
       return post("/v1/policy/bulk", {
         interface: iface,
@@ -347,7 +356,7 @@
       });
     })
       .then(function (r) {
-        if (st) st.textContent = "ok · " + ((r && r.applied) || macs.length) + " → " + iface;
+        if (st) st.textContent = "Applied " + ((r && r.applied) || macs.length) + " client(s) to " + iface + ".";
         refresh();
       })
       .catch(function (e) {
@@ -377,23 +386,18 @@
   function renderPolicy(list) {
     var html = "";
     (list || []).forEach(function (r) {
+      var en = r.enabled !== false;
       html +=
-        "<tr><td>" +
-        esc(r.id) +
-        "</td><td>" +
-        esc(r.source) +
-        "</td><td>" +
-        esc(r.interface) +
-        "</td><td>" +
-        (r.enabled ? "yes" : "no") +
-        "</td><td>" +
-        esc(r.description || "-") +
-        '</td><td><input type="button" class="button_gen axos-pol-del" data-id="' +
-        esc(r.id) +
-        '" value="Delete"></td></tr>';
+        "<tr>" +
+        "<td>" + (en ? "<span style='color:#7dffb3'>Yes</span>" : "<span style='color:#888'>No</span>") + "</td>" +
+        "<td>" + esc(r.description || "-") + "</td>" +
+        "<td>" + esc(r.source) + "</td>" +
+        "<td><span style='color:#FC0'>" + esc(r.interface) + "</span></td>" +
+        '<td><input type="button" class="button_gen axos-pol-del" data-id="' + esc(r.id) + '" value="Remove"></td>' +
+        "</tr>";
     });
-    document.getElementById("axos-policy-body").innerHTML =
-      html || "<tr><td colspan='6'>None</td></tr>";
+    var body = document.getElementById("axos-policy-body");
+    if (body) body.innerHTML = html || "<tr><td colspan='5'>No rules yet — tick clients and click Apply.</td></tr>";
   }
 
   function renderFw(rules) {
@@ -574,34 +578,47 @@
       bindDhcpDelete();
       bindPolicyDelete();
 
-      on("axos-steer-vpn", function () {
+      on("axos-steer-apply", function () {
         var iface = document.getElementById("axos-steer-iface").value || "WAN";
-        if (iface === "WAN") {
-          alert("Pick a VPN tunnel (e.g. WGC5 for Cloudflare), not WAN");
-          return;
-        }
-        applySteer(iface, "axos-vpn");
+        var descEl = document.getElementById("axos-steer-desc");
+        var desc = descEl ? descEl.value.trim() : "axos";
+        applySteer(iface, desc || "axos");
       });
-      on("axos-steer-wan", function () {
-        applySteer("WAN", "axos-wan");
-      });
-      on("axos-steer-all", function () {
+      on("axos-steer-allcb", function () {
+        var all = document.getElementById("axos-steer-allcb");
         var boxes = document.querySelectorAll(".axos-steer-cb");
-        for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
+        for (var i = 0; i < boxes.length; i++) boxes[i].checked = !!(all && all.checked);
       });
-      on("axos-steer-none", function () {
-        var boxes = document.querySelectorAll(".axos-steer-cb");
-        for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
-      });
+      // Selecting a group ticks its members (Merlin-style preset).
+      var gsel = document.getElementById("axos-group-sel");
+      if (gsel) {
+        gsel.onchange = function () {
+          var id = gsel.value;
+          if (!id) {
+            setSteerChecks([]);
+            return;
+          }
+          for (var i = 0; i < steerGroups.length; i++) {
+            if (steerGroups[i].id === id) {
+              setSteerChecks(steerGroups[i].members || []);
+              if (steerGroups[i].interface) {
+                var sel = document.getElementById("axos-steer-iface");
+                if (sel) sel.value = directorIface(steerGroups[i].interface);
+              }
+              break;
+            }
+          }
+        };
+      }
       on("axos-group-save", function () {
         var name = (document.getElementById("axos-group-name").value || "").trim();
         var macs = selectedMACs();
         if (!name) {
-          alert("Group name required");
+          alert("Enter a group name.");
           return;
         }
         if (!macs.length) {
-          alert("Select clients to save in the group");
+          alert("Tick the clients that belong in this group, then Save.");
           return;
         }
         var id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "group";
@@ -622,39 +639,20 @@
             fillGroupSel();
             document.getElementById("axos-group-sel").value = id;
             document.getElementById("axos-group-name").value = "";
-            alert("Saved group " + name);
           })
           .catch(function (e) {
             alert(String(e.message || e));
           });
       });
-      on("axos-group-load", function () {
-        var id = document.getElementById("axos-group-sel").value;
-        if (!id) return;
-        var g = null;
-        for (var i = 0; i < steerGroups.length; i++) {
-          if (steerGroups[i].id === id) {
-            g = steerGroups[i];
-            break;
-          }
-        }
-        if (!g) return;
-        setSteerChecks(g.members || []);
-        if (g.interface) {
-          var sel = document.getElementById("axos-steer-iface");
-          if (sel) sel.value = directorIface(g.interface);
-        }
-      });
       on("axos-group-del", function () {
         var id = document.getElementById("axos-group-sel").value;
-        if (!id || !confirm("Delete group " + id + "?")) return;
-        var next = steerGroups.filter(function (g) {
-          return g.id !== id;
-        });
+        if (!id || !confirm("Delete this group?")) return;
+        var next = steerGroups.filter(function (g) { return g.id !== id; });
         put("/v1/vpn/client-groups", { groups: next })
           .then(function (r) {
             steerGroups = (r && r.groups) || next;
             fillGroupSel();
+            setSteerChecks([]);
           })
           .catch(function (e) {
             alert(String(e.message || e));
@@ -763,34 +761,6 @@
         })
         .catch(function (e) {
           if (st) st.textContent = String(e.message || e);
-        });
-    });
-
-      on("axos-pol-add", function () {
-      var source = document.getElementById("axos-pol-src").value.trim();
-      var iface = document.getElementById("axos-pol-if").value.trim();
-      var desc = document.getElementById("axos-pol-desc").value.trim();
-      var enabled = document.getElementById("axos-pol-en").checked;
-      if (!source || !iface) {
-        alert("Source and interface required");
-        return;
-      }
-      withRollback("merlin-ui-policy-add", function () {
-        return post("/v1/policy", {
-          source: source,
-          interface: iface,
-          description: desc,
-          enabled: enabled,
-        });
-      })
-        .then(function () {
-          document.getElementById("axos-pol-src").value = "";
-          document.getElementById("axos-pol-if").value = "";
-          document.getElementById("axos-pol-desc").value = "";
-          refresh();
-        })
-        .catch(function (e) {
-          alert(String(e.message || e));
         });
     });
 
