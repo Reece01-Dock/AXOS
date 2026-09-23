@@ -177,18 +177,49 @@ these):
   the positive case (a real non-prebuild `.o` file is actually removed).
 - All scripts pass `bash -n`.
 
-**Not verified — needs a real build machine** (this sandbox cannot run
-Docker; see `docs/ROADMAP.md`):
+## Real evidence from an actual build machine
 
-- That `0003`'s fix actually produces a materially faster second build in
-  practice, and by how much.
-- Real ccache hit rates (`ccache -s` before/after is printed by
-  `entrypoint.sh`; nothing here fabricates a number).
-- Every acceptance scenario a full incremental-build reliability review
-  should cover (unchanged rebuild does no unnecessary compilation,
-  interrupt-and-resume preserves completed work, a userspace-only change
-  doesn't rebuild the kernel, a packaging-only retry reuses compiled
-  components, etc.) — these need to actually run.
+The merged pipeline (all patches through `0017`, ccache, `entrypoint.sh`,
+`axos-build.sh`) completed a full real build end to end for the first
+time on 2026-09-23, via `APPLY_PATCHES=1 ./axos-build.sh resume`:
+
+- **Exit code 0**, real signed image:
+  `GT-AX6000_3004_388.9_0_nand_squashfs.pkgtb`,
+  sha256 `dcef62e44be632ea613db0fe32347e0ab6b17a5767363d863e5562047776443f`.
+- **Wall time: 8m40s** (`real 8m40.899s`) — this was a `resume` on top of
+  substantial already-compiled state from earlier failed attempts
+  (router-sysdep, most of userspace, all of the kernel build already
+  done), not a from-clean-source baseline, but it's real, direct
+  evidence that a resume after fixing a real failure reuses previously
+  completed work rather than rebuilding it — the whole point of `0014`'s
+  fix. A from-clean-source baseline timing is still open (see below).
+- **Real ccache stats**, printed by `entrypoint.sh`, not fabricated:
+  `cache hit rate 55.00%` (3936 direct hits + 148 preprocessed hits out
+  of 7425 total lookups), 8236 files in cache, 123.9 MB cache size. This
+  is the first real confirmation the toolchain-mirror wrapper construction
+  (verified earlier only as *construction logic*, never against a real
+  compile) actually produces cache hits during real cross-compilation.
+
+This also, incidentally, validated every one of the 17 patches applying
+and reapplying correctly together in sequence across many real
+build/resume cycles on real hardware — see `firmware/patches/README.md`
+for the full trace of `0013` through `0017`, several of which were only
+found and fixed *because* this incremental-build work forced repeated
+real rebuild/resume cycles that a single one-shot build would never have
+exercised (sqlite's and libogg's automake auto-remake mtime fragility,
+lighttpd's `LIBUNWIND_CFLAGS` and `copy-prebuild` path bugs).
+
+**Still open — needs a real build machine**:
+
+- A from-clean-source baseline timing (`clean-all` then a full build),
+  to compare against the 8m40s resume above and quantify the
+  router-sysdep fix's actual speedup, not just its qualitative effect.
+- Controlled interrupt-and-resume (Ctrl-C mid-build, then `resume`).
+- A single userspace source-file touch + `rebuild <component>`,
+  confirming only that component recompiles.
+- Web-only change vs. no kernel recompilation.
+- Packaging-only failure/retry reusing compiled components.
+- Package removal leaving no stale files in the assembled image.
 
 ## What to run to gather that evidence
 
