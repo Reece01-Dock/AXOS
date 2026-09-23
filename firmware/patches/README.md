@@ -176,6 +176,26 @@ runs configure, rather than touching `configure.ac` itself and re-opening
 the same regeneration-fragility questions `0013`/`0015` already had to
 work around.
 
+## `0017`: same prebuild/ gap pattern as UUPLUGIN/TPVPN/etc, but a path bug
+
+`0017-gt-ax6000-lighttpd-prebuild-path.patch` — lighttpd's `copy-prebuild:`
+target (its substitute for source files this vendor release doesn't ship,
+e.g. `mod_smbdav.c`) copies from a flat `prebuild/mod_smbdav.so.l` path.
+That path doesn't exist for any model — the real prebuilt binaries live
+under a per-model subdirectory (`prebuild/GT-AX6000/`, alongside
+`prebuild/RT-AX88U/`, `prebuild/GT-AX11000/`, etc.) with a `.so`
+extension, not `.so.l`. Confirmed directly: `ls prebuild/GT-AX6000/`
+shows all six needed files (`mod_smbdav.so`, `mod_aidisk_access.so`,
+`mod_aicloud_sharelink.so`, `mod_aicloud_auth.so`, `mod_aicloud_invite.so`,
+`mod_query_field_json.so`) sitting right there — the Makefile just never
+looks in the right place. Same "gap" shape as the `RTCONFIG_UUPLUGIN`/
+`RTCONFIG_TPVPN`/etc. fixes earlier in this project, except those were
+missing files and this is a wrong path to files that do exist. Fixed by
+pointing `copy-prebuild:` at `prebuild/GT-AX6000/<name>.so` directly
+(hardcoded to this model, matching how the rest of this patch set is
+scoped — `Makefile.in` doesn't use a `$(BUILD_NAME)`-style variable here
+to make it generic).
+
 ## Later patches (Milestone 2+)
 
 - Install hook for `axosd` (a `services-start` addition, or an `/etc/init.d`
