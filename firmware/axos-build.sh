@@ -7,7 +7,7 @@
 #
 # This does not reimplement incremental building — that's build.sh calling
 # into the vendor Make tree, whose own dependency tracking is what actually
-# decides what recompiles (see firmware/patches/0003-*.patch, which is what
+# decides what recompiles (see firmware/patches/0014-*.patch, which is what
 # makes that tracking trustworthy across retries in the first place). This
 # script adds: state you can ask "what happened last time" about, logs you
 # can inspect after the fact, a lock so two builds can't corrupt the same

@@ -108,6 +108,19 @@ exit code 0 and produced a real, signed
 `docs/ROADMAP.md`'s Milestone 1 section for the full story and the
 image's hash/manifest.
 
+## `0014`: incremental builds, not a compile-bug fix
+
+`0014-incremental-router-sysdep-sync.patch` (originally drafted as `0003`,
+renumbered to `0014` when this patch set and the incremental-build work
+merged) is a different kind of patch again: `make gt-ax6000` already
+completes without it (see `0013` above). It fixes `release/src-rt/Makefile`
+unconditionally `rm -fr`-ing and recopying `router-sysdep/` on *every*
+invocation, which destroyed all previously-compiled output in that ~90
+component subtree even when nothing had changed — the dominant reason a
+retried build looked like it started over. See `docs/incremental-builds.md`
+for the full root-cause trace and how to use the resulting `axos-build.sh`
+controller.
+
 ## Later patches (Milestone 2+)
 
 - Install hook for `axosd` (a `services-start` addition, or an `/etc/init.d`

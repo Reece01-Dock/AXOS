@@ -38,8 +38,13 @@ sources, correctly seen as up to date by Make's own mtime-based dependency
 tracking) while `--delete` still removes anything no longer present in the
 source. This is the single biggest fix here — everything else is smaller.
 **Requires `APPLY_PATCHES=1`** (see `firmware/patches/README.md` — this
-model's stock source doesn't build without patches applied at all; `0002`
-fixes a separate real compile bug found earlier).
+model's stock source doesn't build without patches applied at all).
+`0002`-`0013` fix thirteen separate real compile bugs found while driving
+this build to completion (missing symbol guards, a getpid/fromfile
+multiple-definition clash, a real parallel-build race, sqlite's autotools
+scaffolding, and more — see `firmware/patches/README.md` for the full
+per-patch trace); `0014` is this rsync fix, renumbered from `0003` when
+that patch set and this incremental-build work were merged together.
 
 Other suspicious `rm -rf` calls in the same Makefile were checked and ruled
 out: Realtek-only (irrelevant — this is a Broadcom HND build), inside the
@@ -67,10 +72,19 @@ re-point (not real content).
   (which would otherwise throw the container's own filesystem away every
   time). `CCACHE_COMPILERCHECK=content` for safety against a moved
   toolchain pin not being caught by an mtime-only check.
-- **Bounded parallelism**: `BUILD_JOBS` (default `min(nproc, 4)`) passed as
-  `make -j`. Known, confirmed limitation: the kernel build phase hardcodes
-  its own `make -j 9` internally (`release/src-rt/Makefile` ~line
-  1226-1227) — that one phase's parallelism isn't governed by `BUILD_JOBS`.
+- **Bounded parallelism**: `BUILD_JOBS` (default `1`, strictly serial) passed
+  as `make -j`. Real builds on real hardware hit two vendor parallel-build
+  races under `-j>1`: `release/src/router/Makefile`'s clean-build vs.
+  `fsbuild/`'s `$(obj-y)` (fixed by `firmware/patches/0008-*.patch`'s
+  `.NOTPARALLEL`) and `router-sysdep/wlan/scripts` needing `nvramUpdate`
+  from the sibling `nvram/` target before it's built ("No rule to make
+  target `nvramUpdate`", not yet patched). This vendor tree was evidently
+  never validated under `-j>1` in general, so the default is serial —
+  override `BUILD_JOBS` only once you've dealt with both races or are
+  prepared to hit the second. Known, confirmed limitation regardless: the
+  kernel build phase hardcodes its own `make -j 9` internally
+  (`release/src-rt/Makefile` ~line 1226-1227) — that one phase's
+  parallelism isn't governed by `BUILD_JOBS` either way.
 - **`firmware/axos-build.sh`**: a controller adding `build`/`resume`/
   `status`/`rebuild <component>`/`clean <component>`/`clean-all`/
   `explain-rebuild` on top of `build.sh` (see below).
@@ -133,9 +147,19 @@ same source tree concurrently.
 Real, direct verification performed in this session (no Docker needed for
 these):
 
-- `firmware/patches/0003-*.patch`: `git apply --check` + a full
+- `firmware/patches/0014-*.patch`: `git apply --check` + a full
   apply-then-revert cycle against the actual pinned checkout, confirmed the
   fix lands correctly at both occurrences.
+- `firmware/patches/0002-0013`, `firmware/build.sh`'s pre-ccache shape, and
+  the full 8-flag RTCONFIG fix: driven to a **real, complete, successful
+  build** on real hardware — `GT-AX6000_3004_388.9_0_nand_squashfs.pkgtb`
+  (63,261,708 bytes, sha256 `8bcae611633e1fafcd2fdf9d3356ed92ffc383c7a170c749552865fcb4bb00b3`).
+  This is strong evidence the patch set and RTCONFIG-flag fix are correct.
+  It predates this incremental-build work being merged in, though: `ccache`,
+  the `entrypoint.sh` extraction, and `axos-build.sh` didn't exist yet at
+  the time of that build, so the *merged* pipeline (this doc, "What to run
+  to gather that evidence" below) still needs its own end-to-end run to
+  confirm nothing in the merge broke that result.
 - ccache toolchain-mirror construction logic: run directly against the real
   `firmware/src/am-toolchains` checkout (not a mockup) — confirmed correct
   wrapper/symlink classification across all 9 toolchain variants.
