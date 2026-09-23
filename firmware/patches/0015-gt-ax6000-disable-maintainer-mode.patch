@@ -1,0 +1,96 @@
+diff --git a/release/src/router/Makefile b/release/src/router/Makefile
+index fe6950ea62..ac4f2e04d5 100644
+--- a/release/src/router/Makefile
++++ b/release/src/router/Makefile
+@@ -5050,7 +5050,7 @@ lldpd-0.9.8: $(if $(RTCONFIG_AMAS),json-c libevent-2.0.21) jansson-2.7 lldpd-0.9
+ 
+ lldpd-0.9.8/Makefile:
+ 	cd lldpd-0.9.8 && autoreconf -i -f && \
+-	$(CONFIGURE) --prefix= --bindir=/usr/sbin --libdir=/usr/lib \
++	$(CONFIGURE) --prefix= --bindir=/usr/sbin --libdir=/usr/lib --disable-maintainer-mode \
+ 	$(if $(RTCONFIG_QCA),--disable-hardening,) \
+ 	CFLAGS="-g -O2 -I$(STAGEDIR)/usr/include" \
+ 	LDFLAGS="-L$(TOP)/lldpd-0.9.8/lib -lm -L$(STAGEDIR)/usr/lib -ljansson $(if $(RTCONFIG_AMAS),-L$(TOP)/json-c/.libs,) -ldl" \
+@@ -5078,7 +5078,7 @@ lldpd-1.0.11: $(if $(RTCONFIG_AMAS),json-c libevent-2.0.21) jansson-2.7 lldpd-1.
+ 
+ lldpd-1.0.11/Makefile:
+ 	cd lldpd-1.0.11 && autoreconf -i -f && \
+-	$(CONFIGURE) --prefix= --bindir=/usr/sbin --libdir=/usr/lib \
++	$(CONFIGURE) --prefix= --bindir=/usr/sbin --libdir=/usr/lib --disable-maintainer-mode \
+ 	$(if $(RTCONFIG_QCA),--disable-hardening,) \
+ 	CFLAGS="-g -O2 -I$(STAGEDIR)/usr/include" \
+ 	LDFLAGS="-L$(TOP)/lldpd-1.0.11/lib -lm -L$(STAGEDIR)/usr/lib -ljansson $(if $(RTCONFIG_AMAS),-L$(TOP)/json-c/.libs,) -ldl" \
+@@ -5130,7 +5130,7 @@ tor/Makefile:
+ 		--with-openssl-dir=$(TOP)/openssl --with-zlib-dir=$(TOP)/zlib \
+ 		--disable-asciidoc --disable-manpage --disable-html-manual \
+ 		--disable-tool-name-check --disable-unittests --disable-lzma --disable-zstd \
+-		--disable-seccomp --disable-libscrypt \
++		--disable-seccomp --disable-libscrypt --disable-maintainer-mode \
+ 		CFLAGS="-I$(TOP)/openssl/include" \
+ 		CPPFLAGS="-I$(TOP)/openssl/include")
+ 
+@@ -5584,7 +5584,7 @@ libogg/stamp-h1:
+ 	cd libogg && autoreconf -i -f && \
+ 	CFLAGS="-Os $(EXTRACFLAGS) -fPIC -ffunction-sections -fdata-sections" \
+ 	LDFLAGS="-fPIC -ffunction-sections -fdata-sections -Wl,--gc-sections" \
+-	$(CONFIGURE) --enable-shared --enable-static --prefix=''
++	$(CONFIGURE) --enable-shared --enable-static --disable-maintainer-mode --prefix=''
+ 	touch $@
+ 	touch libogg/aclocal.m4
+ 
+@@ -6517,7 +6517,7 @@ openvpn/Makefile:
+ 		IPROUTE="/usr/sbin/ip" \
+ 		$(CONFIGURE) --prefix=/usr --bindir=/usr/sbin --libdir=/usr/lib \
+ 			--disable-debug --enable-management --disable-small \
+-			--disable-selinux --disable-dco \
++			--disable-selinux --disable-dco --disable-maintainer-mode \
+ 			--enable-plugin-auth-pam \
+ 			ac_cv_lib_resolv_gethostbyname=no \
+ 			--enable-iproute2 \
+@@ -7753,7 +7753,7 @@ wget/Makefile: wget/Makefile.in
+ 		--with-ssl=openssl --prefix=/usr --sysconfdir=/etc \
+ 		--disable-opie --disable-ntlm --disable-debug --disable-nls --disable-rpath \
+ 		$(if $(RTCONFIG_IPV6),,--disable-ipv6) --disable-iri --without-included-regex  \
+-		--disable-dependency-tracking \
++		--disable-dependency-tracking --disable-maintainer-mode \
+ 		OPENSSL_LIBS="-L$(TOP)/openssl -lcrypto -lssl" \
+ 		OPENSSL_CFLAGS="-I$(TOP)/openssl/include" \
+ 		ZLIB_CFLAGS="-I$(TOP)zlib" \
+@@ -8285,7 +8285,7 @@ nano/Makefile:
+ 		PKG_CONFIG_LIBDIR="$(TOP)/ncurses-6.3/misc" PKG_CONFIG_PATH="$(TOP)/ncurses-6.3/misc" \
+ 		ac_cv_lib_ncursesw_get_wch=no \
+ 		--disable-speller --disable-extra --disable-tabcomp --enable-wrapping --disable-glibtest \
+-		--disable-libmagic --disable-nls
++		--disable-libmagic --disable-nls --disable-maintainer-mode
+ 
+ nano-clean:
+ 	-@$(MAKE) -C nano distclean
+@@ -8418,7 +8418,7 @@ jitterentropy-rngd-install:
+ haveged/Makefile:
+ 	cd haveged && autoreconf -fi && CFLAGS="-Wall -Os $(EXTRACFLAGS) -ffunction-sections -fdata-sections" \
+ 	LDFLAGS="-ffunction-sections -fdata-sections -Wl,--gc-sections" \
+-	$(CONFIGURE) --prefix=/usr --enable-static --disable-shared --enable-daemon --disable-tune --disable-olt
++	$(CONFIGURE) --prefix=/usr --enable-static --disable-shared --enable-daemon --disable-tune --disable-olt --disable-maintainer-mode
+ 
+ haveged: haveged/Makefile
+ 	@$(SEP)
+@@ -8627,7 +8627,7 @@ asd2.1-clean:
+ onig-6.9.9:
+ 	cd onig-6.9.9 && \
+ 	autoreconf -i -f && \
+-	./configure  --host=arm-linux LD=$(CROSS_COMPILE)ld --prefix=/usr --exec-prefix=/usr --bindir=/usr/bin --sbindir=/usr/sbin --libexecdir=/usr/lib && \
++	./configure  --host=arm-linux LD=$(CROSS_COMPILE)ld --prefix=/usr --exec-prefix=/usr --bindir=/usr/bin --sbindir=/usr/sbin --libexecdir=/usr/lib --disable-maintainer-mode && \
+ 	make
+ 
+ onig-6.9.9-install:
+diff --git a/release/src/router/lighttpd-1.4.39/preconfigure-script-hnd b/release/src/router/lighttpd-1.4.39/preconfigure-script-hnd
+index edd867a349..e9f014897a 100755
+--- a/release/src/router/lighttpd-1.4.39/preconfigure-script-hnd
++++ b/release/src/router/lighttpd-1.4.39/preconfigure-script-hnd
+@@ -64,4 +64,5 @@ $CONFIGURE --prefix=/usr \
+ --without-zlib \
+ --without-bzip2 \
+ --enable-shared \
+---disable-static
++--disable-static \
++--disable-maintainer-mode

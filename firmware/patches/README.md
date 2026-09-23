@@ -143,6 +143,27 @@ controller.
   change needed for that).
 - Any web UI additions for the AXOS section, once the design is settled.
 
+## `0015`: the same maintainer-mode gap, everywhere else it exists
+
+`0015-gt-ax6000-disable-maintainer-mode.patch` extends `0013`'s fix
+(`--disable-maintainer-mode`) to every other component in this tree that
+calls `autoreconf`/`autogen.sh` at build time and hadn't already been
+given it: `wget`, `libogg`, `nano`, `haveged`, `tor`, `openvpn`,
+`lldpd-0.9.8`, `lldpd-1.0.11`, `onig-6.9.9`, and `lighttpd-1.4.39` (via
+its `preconfigure-script-hnd`). Found the same way `0013` was — a real
+build, not a guess: after `0013` shipped, a real incremental-rebuild test
+hit `libogg`'s own generated Makefile trying to self-regenerate
+`Makefile.in` via its built-in maintainer-mode auto-remake rule
+(`missing automake-1.16 --foreign` → a hard version-mismatch error
+against the checked-in `aclocal.m4`, generated with automake 1.15). Since
+every one of these components shares the identical mechanism (confirmed:
+none of them passed `--disable-maintainer-mode` before this patch,
+`grep -c disable-maintainer-mode` was 0 across the whole Makefile),
+fixed all of them together rather than rediscovering each one serially
+across further build attempts. Verified: applies cleanly through the
+full patch sequence against the real pinned checkout, and a reverse-check
+confirms it as idempotent.
+
 Keep each patch focused on one logical change and documented with a one-line
 summary at the top of the patch file (a comment above the `diff --git` line is
 fine and ignored by `git apply`).
