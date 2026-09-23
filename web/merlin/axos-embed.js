@@ -100,6 +100,37 @@
     );
   }
 
+  // Section → which data-axos panels to show (comma list). "all" = everything.
+  var SECTION_PANELS = {
+    all: null,
+    vpn: "vpn",
+    dns: "dns",
+    lan: "dhcp,clients",
+    firewall: "firewall",
+    qos: "qos",
+    wifi: "wifi,clients",
+    diag: "diag",
+    system: "system,resources,backup",
+  };
+
+  function applySection() {
+    var section = (global.AXOS_SECTION || "all").toLowerCase();
+    if (section === "__axos_section__") section = "all"; // unsubstituted template
+    var want = SECTION_PANELS[section];
+    var tables = document.querySelectorAll("#axos-root table.axos-table[data-axos]");
+    for (var i = 0; i < tables.length; i++) {
+      var key = tables[i].getAttribute("data-axos");
+      var show = !want || ("," + want + ",").indexOf("," + key + ",") >= 0;
+      if (show) tables[i].classList.remove("axos-hidden");
+      else tables[i].classList.add("axos-hidden");
+    }
+    var full = document.getElementById("axos-full-link");
+    if (full) {
+      if (section === "all") full.style.display = "none";
+      else full.style.display = "";
+    }
+  }
+
   function renderSys(info) {
     document.getElementById("axos-sys-body").innerHTML = kvRows([
       ["Model", info.model],
@@ -390,6 +421,8 @@
 
   global.axosEmbedInit = function () {
     if (!token()) setStatus("missing UI token — run axos-merlin-ui.sh", false);
+
+    applySection();
 
     document.getElementById("axos-refresh").onclick = refresh;
     bindVpnButtons();

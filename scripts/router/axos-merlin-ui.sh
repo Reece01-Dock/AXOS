@@ -1,14 +1,12 @@
 #!/bin/sh
-# axos-merlin-ui.sh — hot-plug AXOS into the stock Merlin httpd UI without a
-# firmware rebuild.
+# axos-merlin-ui.sh — hot-plug AXOS into stock Merlin menus without a firmware rebuild.
 #
-# Merlin's state.js sets current_url to the *basename* of the path and matches
-# menu entries with ===. So the AXOS page must live at /www/<page>.asp
-# (we bind-mount over an unused stock ASP).
+# Merlin's state.js matches menu entries by ASP *basename* (===). Each AXOS
+# panel therefore overlays a different unused stock ASP under /www/.
 #
-# AXOS is added as a tab under Administration (menu_Setting), immediately
-# after Firmware Upgrade — same tab strip as
-# Advanced_FirmwareUpgrade_Content.asp.
+# Tabs (tabName "AXOS") are injected into the Merlin sections where those
+# features already live — VPN, LAN, WAN, Firewall, QoS, Wireless, Network
+# Tools — plus the full panel under Administration (after Firmware Upgrade).
 set -eu
 
 STATE_DIR="${STATE_DIR:-/jffs/axos}"
@@ -17,9 +15,7 @@ TOKEN_FILE="$STATE_DIR/run/ui.token"
 MENU_SRC="/www/require/modules/menuTree.js"
 MENU_DST="$UI_DIR/menuTree.js"
 MENU_STOCK="$UI_DIR/menuTree.stock.js"
-# Unused stock page we overlay — not referenced in menuTree on GT-AX6000.
-AXOS_WWW_PAGE="Main_GameServer_Content.asp"
-AXOS_WWW_PATH="/www/$AXOS_WWW_PAGE"
+TEMPLATE="$UI_DIR/Axos_Content.asp"
 
 mkdir -p "$UI_DIR" "$STATE_DIR/run"
 
@@ -43,37 +39,120 @@ if [ -d /www/userRpm ]; then
   mount --bind "$UI_DIR" /www/userRpm
 fi
 
-# --- Page at www root (basename match for state.js) ---------------------------
-if [ -f "$AXOS_WWW_PATH" ] && [ -f "$UI_DIR/Axos_Content.asp" ]; then
-  umount "$AXOS_WWW_PATH" 2>/dev/null || true
-  mount --bind "$UI_DIR/Axos_Content.asp" "$AXOS_WWW_PATH"
+# --- Build per-menu ASP overlays from the shared template --------------------
+# page|section|title|desc|menu-anchor-asp
+# Anchors are stock tabs we insert *after* in menuTree.js.
+gen_page() {
+  page="$1"
+  section="$2"
+  title="$3"
+  desc="$4"
+  out="$UI_DIR/$page"
+  if [ ! -f "$TEMPLATE" ]; then
+    echo "axos-merlin-ui: missing template $TEMPLATE" >&2
+    return 1
+  fi
+  # Escape & for sed replacement carefully — titles/descs are plain ASCII.
+  sed -e "s|__AXOS_PAGE__|$page|g" \
+      -e "s|__AXOS_SECTION__|$section|g" \
+      -e "s|__AXOS_TITLE__|$title|g" \
+      -e "s|__AXOS_DESC__|$desc|g" \
+      "$TEMPLATE" >"$out"
+  chmod 644 "$out"
+  # Bind over stock /www page (must already exist on squashfs).
+  if [ -f "/www/$page" ]; then
+    umount "/www/$page" 2>/dev/null || true
+    mount --bind "$out" "/www/$page"
+  else
+    echo "axos-merlin-ui: WARN — /www/$page missing, skip bind" >&2
+  fi
+}
+
+if [ -f "$TEMPLATE" ]; then
+  gen_page "Main_GameServer_Content.asp" "all" "Control" \
+    "Full AXOS control panel (Administration)."
+  gen_page "Advanced_VPN_PPTP.asp" "vpn" "VPN" \
+    "AXOS VPN profiles, Director policy, and endpoint ping — next to Merlin VPN."
+  gen_page "Advanced_APPList_Content.asp" "lan" "LAN" \
+    "AXOS DHCP reservations and clients — next to Merlin LAN/DHCP."
+  gen_page "WAN_info.asp" "dns" "DNS" \
+    "AXOS DNS upstreams / DoT — under WAN alongside Merlin DNS tools."
+  gen_page "Advanced_VPN_IPSec.asp" "firewall" "Firewall" \
+    "AXOS firewall preview — next to Merlin Firewall."
+  gen_page "Advanced_AiDisk_webdav.asp" "qos" "QoS" \
+    "AXOS QoS toggle — under Adaptive QoS / Bandwidth Monitor."
+  gen_page "WiFi_Insight.asp" "wifi" "Wi-Fi" \
+    "AXOS radios and clients — next to Merlin Wireless."
+  gen_page "Guest_network.asp" "diag" "Tools" \
+    "AXOS diagnostics — under Network Tools."
 fi
 
-# --- Patch menuTree: Administration tab after Firmware Upgrade ---------------
+# --- Patch menuTree: AXOS tab in each relevant Merlin section ----------------
 umount "$MENU_SRC" 2>/dev/null || true
 if [ -f "$MENU_SRC" ]; then
+  # After umount, MENU_SRC is the real squashfs file — always refresh stock.
   cp -a "$MENU_SRC" "$MENU_STOCK"
   cp -a "$MENU_STOCK" "$MENU_DST"
 
-  # Always rebuild from stock so tab placement stays correct across re-runs.
-  awk -v page="$AXOS_WWW_PAGE" '
+  awk '
+    function emit(page) {
+      print "{url: \"" page "\", tabName: \"AXOS\"},"
+    }
     {
       print
-      # Insert AXOS tab immediately after Firmware Upgrade in menu_Setting.
-      if ($0 ~ /Advanced_FirmwareUpgrade_Content\.asp/ && $0 ~ /tabName/ && !done) {
-        print "{url: \"" page "\", tabName: \"AXOS\"},"
-        done=1
+      # Administration — full panel after Firmware Upgrade
+      if ($0 ~ /Advanced_FirmwareUpgrade_Content\.asp/ && $0 ~ /tabName/ && !a_admin) {
+        emit("Main_GameServer_Content.asp"); a_admin=1
       }
+      # VPN — after VPN Director
+      if ($0 ~ /Advanced_VPNDirector\.asp/ && $0 ~ /tabName/ && !a_vpn) {
+        emit("Advanced_VPN_PPTP.asp"); a_vpn=1
+      }
+      # LAN — after DHCP
+      if ($0 ~ /Advanced_DHCP_Content\.asp/ && $0 ~ /tabName/ && !a_lan) {
+        emit("Advanced_APPList_Content.asp"); a_lan=1
+      }
+      # WAN — after ASUS DDNS (DNS-adjacent)
+      if ($0 ~ /Advanced_ASUSDDNS_Content\.asp/ && $0 ~ /tabName/ && !a_wan) {
+        emit("WAN_info.asp"); a_wan=1
+      }
+      # Firewall — after Basic Firewall
+      if ($0 ~ /Advanced_BasicFirewall_Content\.asp/ && $0 ~ /tabName/ && !a_fw) {
+        emit("Advanced_VPN_IPSec.asp"); a_fw=1
+      }
+      # QoS / Bandwidth Monitor — after EZQoS
+      if ($0 ~ /QoS_EZQoS\.asp/ && $0 ~ /tabName/ && !a_qos) {
+        emit("Advanced_AiDisk_webdav.asp"); a_qos=1
+      }
+      # Wireless — after main Wireless tab
+      if ($0 ~ /Advanced_Wireless_Content\.asp/ && $0 ~ /tabName/ && !a_wifi) {
+        emit("WiFi_Insight.asp"); a_wifi=1
+      }
+      # Network Tools — after Analysis
+      if ($0 ~ /Main_Analysis_Content\.asp/ && $0 ~ /tabName/ && !a_diag) {
+        emit("Guest_network.asp"); a_diag=1
+      }
+    }
+    END {
+      if (!a_admin) exit 11
+      if (!a_vpn)   exit 12
+      if (!a_lan)   exit 13
+      if (!a_wan)   exit 14
+      if (!a_fw)    exit 15
+      if (!a_qos)   exit 16
+      if (!a_wifi)  exit 17
+      if (!a_diag)  exit 18
     }
   ' "$MENU_DST" >"$MENU_DST.tmp" && mv "$MENU_DST.tmp" "$MENU_DST"
 
-  if ! grep -q "tabName: \"AXOS\"" "$MENU_DST" 2>/dev/null; then
-    echo "axos-merlin-ui: ERROR — failed to insert AXOS tab after Firmware Upgrade" >&2
+  axos_tabs=$(grep -c 'tabName: "AXOS"' "$MENU_DST" || true)
+  if [ "$axos_tabs" -lt 8 ]; then
+    echo "axos-merlin-ui: ERROR — expected 8 AXOS tabs, found $axos_tabs" >&2
     exit 1
   fi
 
   mount --bind "$MENU_DST" "$MENU_SRC"
 fi
 
-echo "axos-merlin-ui: ready — Administration → AXOS (next to Firmware Upgrade)"
-echo "axos-merlin-ui: direct URL /$AXOS_WWW_PAGE — log out/in if tabs look stale"
+echo "axos-merlin-ui: ready — AXOS tabs in VPN / LAN / WAN / Firewall / QoS / Wireless / Tools / Administration"
+echo "axos-merlin-ui: log out and back in (or private window) if Merlin Session menu cache is stale"

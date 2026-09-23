@@ -21,3 +21,6 @@
 }
 .hint { color: #9ab; font-size: 11px; margin-left: 8px; }
 .axos-actions input.button_gen { margin-right: 4px; }
+.axos-table.axos-hidden { display: none !important; }
+#axos-full-link { margin-left: auto; color: #9cf; text-decoration: underline; }
+

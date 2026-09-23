@@ -565,13 +565,13 @@ KEEP OR REVERT → CONTINUE. No unbenchmarked "tuning".
 
 - [x] AXOS web UI (Phase 7) — thin Core API client at `/` (same backend as
       MCP/CLI).
-- [x] Custom AXOS sections inside the stock ASUS httpd UI — **Administration →
-      AXOS** tab (after Firmware Upgrade) via JFFS bind-mount
-      (`docs/merlin-ui.md`). Control panel (not JSON dumps): system/resources/
-      Wi-Fi/clients, DNS/QoS apply, diagnostics, VPN up/down + endpoint ping,
-      VPN Director policy, firewall preview, DHCP reservations, backups.
-      Session-gated Merlin page + LAN API token (`X-Axos-UI-Token`).
-      Iterate with `deploy-router.sh` / copy to `merlin-ui/`, no firmware rebuild.
+- [x] Custom AXOS sections inside the stock ASUS httpd UI — **AXOS** tabs in
+      Merlin **VPN / LAN / WAN / Firewall / QoS / Wireless / Network Tools /
+      Administration** (after Firmware Upgrade) via JFFS bind-mount
+      (`docs/merlin-ui.md`). Section-focused panels share one Core API client;
+      Administration keeps the full control panel. Session-gated + LAN API
+      token (`X-Axos-UI-Token`). Iterate with `deploy-router.sh` / 
+      `axos-merlin-ui.sh`, no firmware rebuild.
 - [ ] Package/module system for optional functionality
 - [ ] Historical metrics on USB storage (never internal flash)
 - [ ] Backup encryption at rest, once a key-management approach is decided

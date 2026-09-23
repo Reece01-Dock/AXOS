@@ -7,7 +7,7 @@
 <meta HTTP-EQUIV="Expires" CONTENT="-1">
 <link rel="shortcut icon" href="/images/favicon.png">
 <link rel="icon" href="/images/favicon.png">
-<title><#Web_Title#> - AXOS</title>
+<title><#Web_Title#> - AXOS __AXOS_TITLE__</title>
 <link rel="stylesheet" type="text/css" href="/index_style.css">
 <link rel="stylesheet" type="text/css" href="/form_style.css">
 <link rel="stylesheet" type="text/css" href="/userRpm/axos-embed.css">
@@ -20,6 +20,7 @@
 <script type="text/javascript" src="/userRpm/token.js"></script>
 <script type="text/javascript" src="/userRpm/axos-embed.js"></script>
 <script>
+window.AXOS_SECTION = "__AXOS_SECTION__";
 function initial(){
 	try { show_menu(); } catch (e) {
 		if (window.console && console.warn) console.warn("show_menu:", e);
@@ -34,7 +35,7 @@ function initial(){
 <iframe name="hidden_frame" id="hidden_frame" src="" width="0" height="0" frameborder="0"></iframe>
 
 <form method="post" name="form" action="/start_apply.htm" target="hidden_frame">
-<input type="hidden" name="current_page" value="Main_GameServer_Content.asp">
+<input type="hidden" name="current_page" value="__AXOS_PAGE__">
 <input type="hidden" name="next_page" value="">
 <input type="hidden" name="action_mode" value="">
 <input type="hidden" name="action_script" value="">
@@ -58,32 +59,33 @@ function initial(){
 				<tbody>
 				<tr>
 					<td bgcolor="#4D595D" valign="top">
-						<div class="formfonttitle">AXOS</div>
+						<div class="formfonttitle">AXOS — __AXOS_TITLE__</div>
 						<div style="margin:10px 0 10px 5px;" class="splitLine"></div>
 						<div class="formfontdesc">
-							Same control plane as MCP / CLI. Hot-deployed from JFFS — edit
-							<code>web/merlin/</code>, run <code>deploy-router.sh</code>, no firmware flash.
+							__AXOS_DESC__
+							Same Core API as MCP / CLI · hot from JFFS · no firmware flash.
 						</div>
 
 						<div id="axos-root">
 							<div class="axos-toolbar">
 								<input type="button" class="button_gen" id="axos-refresh" value="Refresh">
 								<span id="axos-status" class="axos-status">connecting…</span>
+								<a id="axos-full-link" class="hint" href="/Main_GameServer_Content.asp" style="display:none">Full AXOS panel</a>
 							</div>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="system" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="2">System</td></tr></thead>
 								<tbody id="axos-sys-body">
 									<tr><th>Status</th><td>Loading…</td></tr>
 								</tbody>
 							</table>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="resources" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="2">Resources</td></tr></thead>
 								<tbody id="axos-res-body"></tbody>
 							</table>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="dns" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="2">DNS</td></tr></thead>
 								<tbody>
 									<tr>
@@ -104,7 +106,7 @@ function initial(){
 								</tbody>
 							</table>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="qos" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="2">QoS</td></tr></thead>
 								<tbody>
 									<tr>
@@ -118,7 +120,7 @@ function initial(){
 								</tbody>
 							</table>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="diag" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="2">Diagnostics</td></tr></thead>
 								<tbody>
 									<tr>
@@ -137,25 +139,25 @@ function initial(){
 								</tbody>
 							</table>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="wifi" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="4">Wi-Fi</td></tr>
 								<tr><th>Radio</th><th>SSID</th><th>Channel</th><th>Clients</th></tr></thead>
 								<tbody id="axos-wifi-body"></tbody>
 							</table>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="clients" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="4">Clients</td></tr>
 								<tr><th>Hostname</th><th>IP</th><th>MAC</th><th>Iface</th></tr></thead>
 								<tbody id="axos-clients-body"></tbody>
 							</table>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="vpn" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="5">VPN profiles</td></tr>
 								<tr><th>Name</th><th>Type</th><th>Endpoint</th><th>Enabled</th><th></th></tr></thead>
 								<tbody id="axos-vpn-body"></tbody>
 							</table>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="vpn" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="2">VPN endpoint ping</td></tr></thead>
 								<tbody>
 									<tr>
@@ -171,7 +173,7 @@ function initial(){
 								</tbody>
 							</table>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="vpn" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="6">VPN Director (policy)</td></tr>
 								<tr><th>ID</th><th>Source</th><th>Interface</th><th>Enabled</th><th>Desc</th><th></th></tr></thead>
 								<tbody id="axos-policy-body"></tbody>
@@ -189,13 +191,13 @@ function initial(){
 								</tbody>
 							</table>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="firewall" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="3">Firewall (filter, first 25)</td></tr>
 								<tr><th>Chain</th><th>Rule</th><th></th></tr></thead>
 								<tbody id="axos-fw-body"></tbody>
 							</table>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="dhcp" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="4">DHCP reservations</td></tr>
 								<tr><th>MAC</th><th>IP</th><th>Hostname</th><th></th></tr></thead>
 								<tbody id="axos-dhcp-body"></tbody>
@@ -212,7 +214,7 @@ function initial(){
 								</tbody>
 							</table>
 
-							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+							<table data-axos="backup" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="2">Config backup</td></tr></thead>
 								<tbody>
 									<tr>
