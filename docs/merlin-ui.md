@@ -23,10 +23,12 @@ Source UI files: `web/merlin/` (staged into each release as `merlin-ui/`).
 
 ## Where to find it in the Merlin UI
 
-- Left menu: **AXOS → Control**
-- Or **Administration** → tab **AXOS** (next to System)
+- **Administration** → tab **AXOS** (immediately after **Firmware Upgrade**)
 - Direct URL (while logged in):
   `http://www.asusrouter.com/Main_GameServer_Content.asp`
+- From Firmware Upgrade:
+  `http://www.asusrouter.com/Advanced_FirmwareUpgrade_Content.asp`
+  then click the **AXOS** tab in the same strip
 
   (That stock filename is an unused page we overlay — Merlin’s menu code
   only matches basenames, so the page has to live at `/www/*.asp`.)

@@ -3,8 +3,12 @@
 # firmware rebuild.
 #
 # Merlin's state.js sets current_url to the *basename* of the path and matches
-# menu entries with ===. So the AXOS page must live at /www/Axos_Content.asp
-# (we bind-mount over an unused stock ASP), not only under /userRpm/.
+# menu entries with ===. So the AXOS page must live at /www/<page>.asp
+# (we bind-mount over an unused stock ASP).
+#
+# AXOS is added as a tab under Administration (menu_Setting), immediately
+# after Firmware Upgrade — same tab strip as
+# Advanced_FirmwareUpgrade_Content.asp.
 set -eu
 
 STATE_DIR="${STATE_DIR:-/jffs/axos}"
@@ -13,7 +17,6 @@ TOKEN_FILE="$STATE_DIR/run/ui.token"
 MENU_SRC="/www/require/modules/menuTree.js"
 MENU_DST="$UI_DIR/menuTree.js"
 MENU_STOCK="$UI_DIR/menuTree.stock.js"
-MARKER="menu_AXOS"
 # Unused stock page we overlay — not referenced in menuTree on GT-AX6000.
 AXOS_WWW_PAGE="Main_GameServer_Content.asp"
 AXOS_WWW_PATH="/www/$AXOS_WWW_PAGE"
@@ -46,46 +49,31 @@ if [ -f "$AXOS_WWW_PATH" ] && [ -f "$UI_DIR/Axos_Content.asp" ]; then
   mount --bind "$UI_DIR/Axos_Content.asp" "$AXOS_WWW_PATH"
 fi
 
-# --- Patch menuTree from clean stock copy ------------------------------------
+# --- Patch menuTree: Administration tab after Firmware Upgrade ---------------
 umount "$MENU_SRC" 2>/dev/null || true
 if [ -f "$MENU_SRC" ]; then
   cp -a "$MENU_SRC" "$MENU_STOCK"
   cp -a "$MENU_STOCK" "$MENU_DST"
 
-  if ! grep -q "$MARKER" "$MENU_DST" 2>/dev/null; then
-    awk -v mark="$MARKER" -v page="$AXOS_WWW_PAGE" '
-      BEGIN { done=0 }
-      {
-        print
-        if (!done && $0 ~ /list:[[:space:]]*\[/) {
-          print "\t{"
-          print "\t\tmenuName: \"AXOS\","
-          print "\t\tindex: \"" mark "\","
-          print "\t\ttab: ["
-          print "\t\t\t{url: \"" page "\", tabName: \"Control\"},"
-          print "\t\t\t{url: \"NULL\", tabName: \"__INHERIT__\"}"
-          print "\t\t]"
-          print "\t},"
-          done=1
-        }
+  # Always rebuild from stock so tab placement stays correct across re-runs.
+  awk -v page="$AXOS_WWW_PAGE" '
+    {
+      print
+      # Insert AXOS tab immediately after Firmware Upgrade in menu_Setting.
+      if ($0 ~ /Advanced_FirmwareUpgrade_Content\.asp/ && $0 ~ /tabName/ && !done) {
+        print "{url: \"" page "\", tabName: \"AXOS\"},"
+        done=1
       }
-    ' "$MENU_DST" >"$MENU_DST.tmp" && mv "$MENU_DST.tmp" "$MENU_DST"
-  fi
+    }
+  ' "$MENU_DST" >"$MENU_DST.tmp" && mv "$MENU_DST.tmp" "$MENU_DST"
 
   if ! grep -q "tabName: \"AXOS\"" "$MENU_DST" 2>/dev/null; then
-    awk -v page="$AXOS_WWW_PAGE" '
-      {
-        print
-        if ($0 ~ /Advanced_System_Content\.asp/ && $0 ~ /tabName/ && !done) {
-          print "{url: \"" page "\", tabName: \"AXOS\"},"
-          done=1
-        }
-      }
-    ' "$MENU_DST" >"$MENU_DST.tmp" && mv "$MENU_DST.tmp" "$MENU_DST"
+    echo "axos-merlin-ui: ERROR — failed to insert AXOS tab after Firmware Upgrade" >&2
+    exit 1
   fi
 
   mount --bind "$MENU_DST" "$MENU_SRC"
 fi
 
-echo "axos-merlin-ui: ready — open /$AXOS_WWW_PAGE (Administration → AXOS)"
-echo "axos-merlin-ui: log out/in if the left menu is stale"
+echo "axos-merlin-ui: ready — Administration → AXOS (next to Firmware Upgrade)"
+echo "axos-merlin-ui: direct URL /$AXOS_WWW_PAGE — log out/in if tabs look stale"
