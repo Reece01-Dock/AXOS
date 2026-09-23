@@ -1,0 +1,68 @@
+This is the single biggest fix for reliable incremental builds on this
+codebase, found while inspecting why retries appeared to start over.
+
+release/src-rt/Makefile (symlinked as
+release/src-rt-5.04axhnd.675x/Makefile) has two device-name pattern rules
+that match "gt-ax6000"/"GT-AX6000" (`gt-% GT-%:` and a second explicit
+model list). Both unconditionally do, on EVERY invocation of `make
+gt-ax6000`, success or retry, changed or unchanged:
+
+    rm -fr router-sysdep
+    cp -ar router-sysdep.$(lowercase_B)/ router-sysdep
+
+router-sysdep.gt-ax6000/ is 817 files / 32MB spanning ~90 components
+(bcm_util, wlan, wlconf, wlcsm, ethctl, fcctl, bridge-utils, mtd, and
+more) - and critically, router-sysdep (no suffix) is not just a source
+copy, it's also where these components get COMPILED: object/library
+outputs land inside router-sysdep/<component>/ alongside the copied
+source. Deleting the whole tree before every build destroys every
+previously-compiled output in it, forcing a full rebuild of this entire
+subtree regardless of whether anything actually changed. Confirmed
+directly against a real failing build log: bcm_ethswutils.o was compiling
+inside router-sysdep/bcm_util/, which only exists via this copy step.
+
+Fix: replace the unconditional wipe+copy with an incremental sync
+(rsync -a --delete). This preserves Make's own native mtime-based
+dependency tracking rather than requiring a separate invalidation system
+for this component: rsync only touches files that actually changed
+(so existing .o/.so outputs for unchanged sources are left alone and
+correctly seen as up to date), while --delete still removes anything no
+longer present in the source (so a file removed from
+router-sysdep.gt-ax6000/ doesn't linger as stale content the way it would
+with a plain incremental copy). rsync is already a build dependency
+(firmware/docker/Dockerfile installs it).
+
+Verified git apply --check and a full apply-then-revert cycle against
+the pinned tag (3004.388.9) checkout, including confirming the fix lands
+correctly at both occurrences.
+
+diff --git a/release/src-rt/Makefile b/release/src-rt/Makefile
+index 9792990eac..7ff9c10a53 100755
+--- a/release/src-rt/Makefile
++++ b/release/src-rt/Makefile
+@@ -6260,9 +6260,9 @@ endif
+ 
+ ifeq ($(HND_ROUTER),y)
+ ifeq ($(or $(HND_ROUTER_AX_675x),$(HND_ROUTER_AX)),y)
+-	@echo "Copy router-sysdep.$(lowercase_B) content"
+-	@rm -fr router-sysdep
+-	@cp -ar router-sysdep.$(lowercase_B)/ router-sysdep
++	@echo "Sync router-sysdep.$(lowercase_B) content into router-sysdep (incremental)"
++	@mkdir -p router-sysdep
++	@rsync -a --delete router-sysdep.$(lowercase_B)/ router-sysdep/
+ else	# RT-AC86U or GT-AC2900
+ 	@cp -ar $(TOP_PLATFORM)/hnd_extra/prebuilt/$(BUILD_NAME)/* $(TOP_PLATFORM)/hnd_extra/prebuilt/
+ endif
+@@ -6285,9 +6285,9 @@ ETJ etj:
+ ET12 et12 XT12 xt12 XD4PRO xd4pro XT8PRO xt8pro BM68 bm68 XT8_V2 xt8_v2 ET8PRO et8pro ET8_V2 et8_v2 GT10 gt10 XD6_V2 xd6_v2 BR63 br63 BC109 bc109 BC105 bc105 EBG19 ebg19 EBG15 ebg15 XC5 xc5 eba63:
+ 	$(call save_src_config, $@,_CFG)
+ ifeq ($(or $(HND_ROUTER_AX_675x),$(HND_ROUTER_AX)),y)
+-	@echo "Copy router-sysdep.$(lowercase_B) content"
+-	@rm -fr router-sysdep
+-	@cp -ar router-sysdep.$(lowercase_B)/ router-sysdep
++	@echo "Sync router-sysdep.$(lowercase_B) content into router-sysdep (incremental)"
++	@mkdir -p router-sysdep
++	@rsync -a --delete router-sysdep.$(lowercase_B)/ router-sysdep/
+ endif
+ 	$(MAKE) bin
+ 

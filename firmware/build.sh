@@ -14,6 +14,28 @@ TOOLCHAINS_SRC="$SRC_DIR/am-toolchains"
 OUT_DIR="${OUT_DIR:-$HERE/out}"
 IMAGE_TAG="${IMAGE_TAG:-axos-merlin-build}"
 APPLY_PATCHES="${APPLY_PATCHES:-0}"
+CCACHE_DIR_HOST="${CCACHE_DIR_HOST:-$HERE/.ccache}"
+# Conservative CPU/RAM-aware default. Confirmed in the real source: the
+# top-level Makefile's device-name rules (release/src-rt/Makefile, symlinked
+# in as this build dir's Makefile) all recurse via a plain `$(MAKE) bin`
+# (grep shows no `+$(MAKE)` anywhere in this file) — GNU Make does still
+# auto-detect a textual `$(MAKE)` in a recipe as recursive and normally
+# propagates the jobserver to it without needing a leading `+`, but this
+# codebase's *own* nested recursion (make.common includes, per-component
+# sub-Makefiles, the kernel build's own internal `-j 9` at line 1226-1227
+# hardcoding its own parallelism independent of ours) hasn't been fully
+# audited stage by stage, so exact jobserver-sharing behavior throughout
+# the whole tree isn't something this session verified empirically. Given
+# that uncertainty plus memory-heavy individual compiles (cc1 on the m32
+# host-tool builds especially), default to min(nproc, 4) rather than
+# nproc — override explicitly (BUILD_JOBS=N) if your box's RAM can take
+# more; see docs/build-environment.md "Parallelism".
+if command -v nproc >/dev/null 2>&1; then
+  _nproc="$(nproc)"
+else
+  _nproc=4
+fi
+BUILD_JOBS="${BUILD_JOBS:-$([ "$_nproc" -lt 4 ] && echo "$_nproc" || echo 4)}"
 
 if [ ! -d "$MERLIN_SRC" ] || [ ! -d "$TOOLCHAINS_SRC" ]; then
   echo "error: sources not found under $SRC_DIR — run ./setup-sources.sh first" >&2
@@ -48,88 +70,21 @@ fi
 # chip_profile.mak's "GT-AX6000_CHIP_PROFILE=4912" line.
 BUILD_SUBDIR="release/src-rt-5.04axhnd.675x"
 
+mkdir -p "$CCACHE_DIR_HOST"
+
 echo "==> Running build inside container (this can take 45-90+ minutes)"
 docker run --rm \
   -v "$MERLIN_SRC":/build/asuswrt-merlin.ng \
   -v "$TOOLCHAINS_SRC":/opt/am-toolchains \
   -v "$OUT_DIR":/build/out \
+  -v "$CCACHE_DIR_HOST":/home/builder/.ccache \
+  -v "$HERE/docker/entrypoint.sh":/entrypoint.sh:ro \
+  -e CCACHE_DIR=/home/builder/.ccache \
+  -e CCACHE_COMPILERCHECK=content \
+  -e BUILD_JOBS="$BUILD_JOBS" \
   -w /build/asuswrt-merlin.ng/release/src-rt-5.04axhnd.675x \
   "$IMAGE_TAG" \
-  bash -lc '
-    set -euo pipefail
-    echo "== toolchain check =="
-    ls /opt/toolchains || { echo "toolchain symlink missing/broken"; exit 1; }
-    # /etc/ld.so.conf.d/am-toolchains.conf (see Dockerfile) names the
-    # crosstools lib dirs, but they only exist now that this volume is
-    # mounted — rebuild the ldconfig cache against the real, now-present
-    # directories so cc1 and friends can find their bundled libisl/libmpc/
-    # libmpfr/libgmp (their baked-in RPATH points at the original build
-    # machine, not here — see the Dockerfile comment for the full story).
-    echo "== refreshing ldconfig cache for the mounted toolchains =="
-    sudo ldconfig
-    echo "== building GT-AX6000 =="
-    # Target name confirmed against the upstream repo'\''s own multi-model
-    # build automation (tools/build-all: build_fw() does exactly
-    # `cd release/src-rt-5.04axhnd.675x && make "$FWMODEL"` with
-    # FWMODEL="gt-ax6000" — note the dash; "gtax6000" (no dash) is not a
-    # valid target and was an earlier, unverified guess in this script).
-    #
-    # RTCONFIG_UUPLUGIN/RTCONFIG_GEARUPPLUGIN=n: these ASUS cloud-account
-    # plugin features (unrelated to core networking) default OFF in both
-    # release/src/router/config/config.in and config_base, and GT-AX6000'\''s
-    # own config fragment (targets/94912GW/94912GW.GT-AX6000) never turns
-    # them on — yet release/src/router/shared/Makefile'\''s OBJS list still
-    # pulled in prebuild/uu_utils.o, which this Merlin release genuinely
-    # does not ship for GT-AX6000 (confirmed: prebuild/GT-AX6000/ has 16
-    # other prebuilt .o files, not this one — only present for
-    # RT-AX86U/RT-AX58U/RT-AX68U/RT-AX88U/GT-AX11000).
-    #
-    # After that fix hit the exact same failure shape twice more
-    # (RTCONFIG_TPVPN pulling in prebuild/tpvpn.o), a full audit was done
-    # across every "prebuild/" directory in the tree (46 of them) rather
-    # than continuing to fix these one crash at a time — comparing
-    # GT-AX6000'\''s file set against every sibling model'\''s, then tracing
-    # each gap'\''s consuming Makefile:
-    #
-    #   - RTCONFIG_TPVPN, RTCONFIG_AMAS_ADTBW, RTCONFIG_PRELINK,
-    #     RTCONFIG_BRCM_HOSTAPD: same shape as UUPLUGIN — each gates an
-    #     OBJS += prebuild/*.o in release/src/router/rc/Makefile with no
-    #     source-file fallback, each defaults off in config.in/config_base,
-    #     and GT-AX6000'\''s own fragment never turns any of them on either.
-    #     GT-AX6000'\''s prebuild/ is missing every one of these objects
-    #     (amas-adtbw-broadcom.o, amas_adtbw.o, amas_prelink.o,
-    #     hostapd_config.o, tpvpn.o, wps_pbcd.o) — this model'\''s own source
-    #     release plainly never intended these built.
-    #   - RTCONFIG_RGBLED, RTCONFIG_BT_CONN: gate whole subdirectories
-    #     (aura_sw; bluez-5.56 and btconfig) that have no GT-AX6000
-    #     prebuild/ entry *at all* (unlike the others, not even a
-    #     partial/missing-file case — no per-model prebuilt anything
-    #     exists for this hardware). Both also default off with no
-    #     GT-AX6000 override, consistent with this model having neither
-    #     RGB LEDs nor a Bluetooth radio.
-    #   - dns_dpi_check.o (also missing from GT-AX6000'\''s rc/prebuild) is
-    #     NOT a risk: confirmed via `git grep` it is not referenced by name
-    #     anywhere in the tracked source, in any Makefile or .c file — an
-    #     orphaned prebuilt artifact nothing actually consumes.
-    #   - asd2.1 (also has no GT-AX6000 prebuild/ entry) is NOT a risk
-    #     either: its own Makefile copies prebuild/$(BUILD_NAME)/* with a
-    #     leading "-" (make'\''s ignore-errors-on-this-line prefix), so a
-    #     missing prebuilt binary there is a silent, designed-in no-op,
-    #     not a hard failure — unlike the OBJS+= pattern above.
-    #
-    # All six flags below default off in both
-    # release/src/router/config/config.in and config_base, and
-    # targets/94912GW/94912GW.GT-AX6000 never overrides any of them on —
-    # forcing them off on the command line (which wins over whatever
-    # internal Kconfig/.config state is otherwise enabling them; confirmed
-    # no `override` directive anywhere in these Makefiles that would defeat
-    # it) is safe regardless of the exact cause, and matches what the
-    # shipped source for this model clearly intends.
-    make gt-ax6000 \
-      RTCONFIG_UUPLUGIN=n RTCONFIG_GEARUPPLUGIN=n \
-      RTCONFIG_TPVPN=n RTCONFIG_AMAS_ADTBW=n RTCONFIG_PRELINK=n \
-      RTCONFIG_BRCM_HOSTAPD=n RTCONFIG_RGBLED=n RTCONFIG_BT_CONN=n
-  '
+  bash /entrypoint.sh
 
 echo "==> Locating build output"
 # tools/build-all looks specifically in image/ and matches

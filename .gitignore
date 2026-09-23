@@ -5,6 +5,11 @@
 # each submodule's own .git, not this repo's ignore rules.
 /firmware/out/
 /firmware/.sources-pinned
+# axos-build.sh's own state (lock, last-run.json, per-run logs) and the
+# persistent ccache directory build.sh bind-mounts into the container —
+# both local build state, not something to commit.
+/firmware/.build-state/
+/firmware/.ccache/
 
 # Go
 *.test
