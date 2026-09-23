@@ -4,9 +4,9 @@
 # rsync the resulting release to the router's staging dir, then run
 # `axosctl deploy` remotely to promote it atomically.
 #
-# STATUS: local half verified in sandbox; remote half verified 2026-09-23
-# against a GT-AX6000 at /jffs/axos (first install via install-axosd.sh,
-# then routine deploys with this script + key-based SSH).
+# STATUS: verified 2026-09-23 end-to-end against a GT-AX6000 at /jffs/axos
+# (first install via install-axosd.sh, then this script with key-based SSH;
+# tar-over-ssh used when rsync is unavailable).
 #
 # Usage:
 #   ./scripts/deploy-router.sh user@router [components] [remote-axos-root]
@@ -33,10 +33,20 @@ RELEASE_DIR="$(readlink -f "$LOCAL_ROOT/current")"
 echo "==> Built release: $(basename "$RELEASE_DIR")"
 
 echo "==> Syncing to $ROUTER:$REMOTE_ROOT/staging"
-ssh $SSH_OPTS "$ROUTER" "mkdir -p '$REMOTE_ROOT/staging'"
-rsync -az --delete -e "ssh $SSH_OPTS" "$RELEASE_DIR/" "$ROUTER:$REMOTE_ROOT/staging/"
+ssh $SSH_OPTS "$ROUTER" "rm -rf '$REMOTE_ROOT/staging' && mkdir -p '$REMOTE_ROOT/staging'"
+if command -v rsync >/dev/null 2>&1; then
+  rsync -az --delete -e "ssh $SSH_OPTS" "$RELEASE_DIR/" "$ROUTER:$REMOTE_ROOT/staging/"
+else
+  # Dev environments without rsync: stream the release tree over ssh.
+  # Same end state as rsync (staging replaced atomically-enough for promote).
+  tar -C "$RELEASE_DIR" -czf - . | ssh $SSH_OPTS "$ROUTER" "tar -C '$REMOTE_ROOT/staging' -xzf -"
+fi
 
 echo "==> Promoting on $ROUTER (checksum-verified there too — see internal/deploy)"
+# Use the bootstrap axosctl under bin/ (from install-axosd.sh). After the
+# first promote, releases live under current/; bin/ remains the CLI that
+# drives subsequent promotes (don't run axosctl out of staging — Deploy
+# renames staging away).
 ssh $SSH_OPTS "$ROUTER" "'$REMOTE_ROOT/bin/axosctl' deploy -root '$REMOTE_ROOT' -skip-tests -skip-build -components '$COMPONENTS'"
 
 echo ""

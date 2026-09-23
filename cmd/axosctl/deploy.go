@@ -119,7 +119,11 @@ func buildComponents(outDir string, components []string, goos, goarch string) er
 }
 
 func runGoTest() error {
-	cmd := exec.Command("go", "test", "./...")
+	// Only AXOS packages — never ./..., which would pick up stray Go under
+	// firmware/src-stock (local Merlin clone) when that tree is present.
+	// Nested go.mod files under firmware/src{,-stock}/ are a second line of
+	// defence; this keep-list is the authoritative one for deploy.
+	cmd := exec.Command("go", "test", "./cmd/...", "./internal/...")
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	return cmd.Run()
 }

@@ -63,6 +63,8 @@ Common flags:
   -fixture string     replay: path to a fixture directory
   -host string         asuswrt: run over SSH against this host instead of
                         locally (Live Development Mode)
+  -backup-dir string   asuswrt: config.backup storage dir (default
+                        /jffs/axos/backups)
   -audit string        Path to the append-only audit log (default "./axosd-audit.jsonl")
   -actor string          Identity recorded in audit log entries (mcp mode only —
                           serve mode reads it per-request from X-Axos-Actor)
@@ -83,6 +85,7 @@ func backendFlags(fs *flag.FlagSet) *backendselect.Options {
 	fs.StringVar(&o.Name, "backend", "mock", `Backend implementation: "mock", "replay", or "asuswrt"`)
 	fs.StringVar(&o.Fixture, "fixture", "", "replay: path to a fixture directory")
 	fs.StringVar(&o.Host, "host", "", "asuswrt: run over SSH against this host instead of locally")
+	fs.StringVar(&o.BackupDir, "backup-dir", "", "asuswrt: directory for config.backup snapshots (default /jffs/axos/backups)")
 	return o
 }
 

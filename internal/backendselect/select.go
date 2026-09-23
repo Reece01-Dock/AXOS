@@ -16,10 +16,11 @@ import (
 // Options carries every flag any backend might need. Irrelevant fields for
 // a given Name are ignored (e.g. Fixture is ignored unless Name == "replay").
 type Options struct {
-	Name    string // "mock" | "replay" | "asuswrt"
-	Fixture string // replay: path to a fixture directory (see internal/capture)
-	Host    string // asuswrt: if set, run over SSH via this host instead of locally
-	SSHArgs []string
+	Name      string // "mock" | "replay" | "asuswrt"
+	Fixture   string // replay: path to a fixture directory (see internal/capture)
+	Host      string // asuswrt: if set, run over SSH via this host instead of locally
+	SSHArgs   []string
+	BackupDir string // asuswrt: override config.backup storage directory
 }
 
 // New builds the backend Options describes. Returns an error naming the
@@ -39,6 +40,9 @@ func New(o Options) (backend.RouterBackend, error) {
 		var opts []asuswrt.Option
 		if o.Host != "" {
 			opts = append(opts, asuswrt.WithHost(o.Host, o.SSHArgs...))
+		}
+		if o.BackupDir != "" {
+			opts = append(opts, asuswrt.WithBackupDir(o.BackupDir))
 		}
 		return asuswrt.New(opts...)
 	default:

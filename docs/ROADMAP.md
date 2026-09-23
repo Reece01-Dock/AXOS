@@ -19,10 +19,12 @@ actually verified" for exactly what was run), but it is not `[x]`. As of
   `3006.102-wifi6` + AXOS login-title marker flashed and verified — see
   `docs/flashing-and-recovery.md`).
 - **Milestone 2** runtime is on the router: `axosd` under `/jffs/axos`,
-  Core API on loopback, live reads verified, sanitized
+  Core API on loopback, live reads + mutating paths (shell_exec, backup/
+  restore, rollback) verified, MCP stdio exercised, atomic
+  `deploy-router.sh` promote to `releases/000001`, sanitized
   `testdata/gt-ax6000/` capture checked in, SSH is key-only
-  (`docs/ssh-access.md`). Remaining M2 work: Phase 7 (web UI), Phase 9
-  (bake into firmware), and re-driving mutating/MCP paths on hardware.
+  (`docs/ssh-access.md`). Remaining M2 work: Phase 7 (web UI) and Phase 9
+  (bake into firmware).
 
 ## Milestone 1 — Prove the build → flash → recover loop
 
@@ -437,8 +439,9 @@ see `docs/flashing-and-recovery.md` before doing that on a real router.
 
 ## Milestone 2 — First AXOS control service (`axosd`) + MCP
 
-Everything that was `[s]` is now hardware-verified where noted `[x]` below.
-Remaining open items are Phase 7 (web UI) and Phase 9 (bake into firmware).
+Everything that was `[s]` for M2 runtime is now hardware-verified `[x]`
+below. Remaining open items are Phase 7 (web UI) and Phase 9 (bake into
+firmware).
 
 - [x] `axosd`/`axos-mcp`/`axosctl` cross-compile cleanly for aarch64 —
       static `linux/arm64` binaries (~18 MB total) built 2026-09-23
@@ -454,14 +457,17 @@ Remaining open items are Phase 7 (web UI) and Phase 9 (bake into firmware).
       (`wl0`/`wl1`, SSID `Reece-Net`)
 - [x] Router-native services, firewall rules, VPN tunnel status, full nvram
       dump — `/v1/services`, `/v1/firewall`, `/v1/vpn`, capture `nvram.json`
-- [s] `system.shell_exec` (root shell, audited) — sandbox-proven; not
-      re-driven on hardware this session
-- [s] Config backup / restore — sandbox-proven; not re-driven on hardware
-- [s] Audit logging of every mutating call — audit path configured on
-      router (`/jffs/axos/logs/audit.jsonl`); mutating calls not re-driven
-- [s] Rollback engine — sandbox-proven; not re-driven on hardware
-- [s] All of the above exposed over MCP and driven end-to-end — sandbox;
-      on-router MCP stdio path not exercised this session
+- [x] `system.shell_exec` (root shell, audited) — `uname -a` via
+      `POST /v1/shell_exec`; audit `result=ok`
+- [x] Config backup / restore — backup to `/jffs/axos/backups` (0600/0700);
+      restore of `backup-20260923-202632` → `status=restored` (nvram commit
+      timeout raised to 60s; bare `nvram commit` ~16s on this unit)
+- [x] Audit logging of every mutating call — `/jffs/axos/logs/audit.jsonl`
+      records shell_exec / backup / restore / rollback.arm / rollback.confirm
+- [x] Rollback engine — `rollback.arm` (`txn-1`) + `rollback.confirm` OK
+- [x] All of the above exposed over MCP and driven end-to-end — on-router
+      `axos-mcp` stdio: `initialize`, `tools/list`, `tools/call system.info`
+      → GT-AX6000 / 102.9
 - [x] Audit log and backup files/dirs are owner-only (0600/0700)
 - [x] Backup restore refuses a checksum-mismatched backup
 - [x] SSH password auth disabled on the router, key-only access confirmed —
@@ -482,15 +488,19 @@ Detailed status of the phases behind Milestone 2 — see
       set captured from the router 2026-09-23
 - [x] **Phase 3** — `AsuswrtBackend` live on GT-AX6000 (info/resources/
       interfaces/routes/clients/wifi/services/firewall/nvram)
-- [s] **Phase 4** — Atomic releases (`internal/deploy`) — sandbox; first
-      install used `install-axosd.sh` / plain copy to `/jffs/axos`
-- [s] **Phase 5** — Cross-compilation + deploy pipeline — arm64 build
-      verified; full `deploy-router.sh` promote cycle not yet re-run
-- [s] **Phase 6** — MCP as independent process — sandbox; not started as
-      a supervised sibling on the router yet
+- [x] **Phase 4** — Atomic releases (`internal/deploy`) — first
+      `deploy-router.sh` promote on hardware created
+      `/jffs/axos/releases/000001` + `current` symlink
+- [x] **Phase 5** — Cross-compilation + deploy pipeline —
+      `scripts/deploy-router.sh Reece@192.168.50.1` (tar fallback when
+      rsync absent); promote + health OK
+- [x] **Phase 6** — MCP as independent process — stdio `axos-mcp` on the
+      router against live Core API (not a supervised sibling; by design —
+      see `docs/development.md`)
 - [ ] **Phase 7** — Web UI dev server + hot static asset deployment — not
       started
-- [s] **Phase 8** — Network transaction layer + timed rollback watchdog
+- [x] **Phase 8** — Network transaction layer + timed rollback watchdog —
+      arm/confirm verified on hardware
 - [ ] **Phase 9** — Integrate the stable AXOS bootstrap into the Merlin
       firmware fork — next after M2 runtime is solid
 

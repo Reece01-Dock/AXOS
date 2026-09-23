@@ -81,7 +81,7 @@ func New(opts ...Option) (*Backend, error) {
 	b := &Backend{
 		// (verify) default USB mount label/layout on GT-AX6000; Merlin
 		// typically mounts USB storage under /tmp/mnt/<label> or /mnt/<label>.
-		BackupDir: "/mnt/usb1/axos/backups",
+		BackupDir: "/jffs/axos/backups",
 		runner:    execRunner{},
 	}
 	for _, opt := range opts {
@@ -716,7 +716,7 @@ func (b *Backend) Restore(ctx context.Context, backupID string) error {
 		applied++
 	}
 
-	if _, err := b.run(ctx, 10*time.Second, "nvram", "commit"); err != nil {
+	if _, err := b.run(ctx, 60*time.Second, "nvram", "commit"); err != nil {
 		return fmt.Errorf("asuswrt: nvram commit after restore: %w", err)
 	}
 

@@ -170,7 +170,7 @@ axosctl deploy -root /opt/axos -skip-tests            # skip the test-suite gate
 
 What it does, in order (`cmd/axosctl/deploy.go`):
 
-1. `go test ./...` (skip with `-skip-tests`) — **a failing test blocks the
+1. `go test ./cmd/... ./internal/...` (skip with `-skip-tests`) — **a failing test blocks the
    deploy entirely; nothing gets staged.**
 2. Cross-compile each named `cmd/` package (`-goos`/`-goarch` for targeting
    the router; empty means build for the host, useful for local dev-loop

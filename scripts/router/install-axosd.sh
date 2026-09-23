@@ -73,7 +73,7 @@ if ! grep -qF "$MARKER" "$SERVICES_START" 2>/dev/null; then
     {
         echo ""
         echo "$MARKER"
-        echo "$BIN_DIR/axosd serve -backend=asuswrt -api-addr=$API_ADDR -audit=$AXOS_DIR/logs/audit.jsonl -service-log-dir=$AXOS_DIR/logs >> $AXOS_DIR/logs/axosd.log 2>&1 &"
+        echo "$BIN_DIR/axosd serve -backend=asuswrt -api-addr=$API_ADDR -backup-dir=$AXOS_DIR/backups -audit=$AXOS_DIR/logs/audit.jsonl -service-log-dir=$AXOS_DIR/logs >> $AXOS_DIR/logs/axosd.log 2>&1 &"
     } >> "$SERVICES_START"
     echo "==> Registered axosd in $SERVICES_START"
 else
@@ -83,7 +83,7 @@ fi
 chmod 755 "$SERVICES_START"
 
 echo "==> Done. axosd will start on next boot (Core API on $API_ADDR), or start it now with:"
-echo "    $BIN_DIR/axosd serve -backend=asuswrt -api-addr=$API_ADDR -audit=$AXOS_DIR/logs/audit.jsonl -service-log-dir=$AXOS_DIR/logs &"
+echo "    $BIN_DIR/axosd serve -backend=asuswrt -api-addr=$API_ADDR -backup-dir=$AXOS_DIR/backups -audit=$AXOS_DIR/logs/audit.jsonl -service-log-dir=$AXOS_DIR/logs &"
 echo ""
 echo "axos-mcp is NOT started here — it's invoked per SSH session by whatever"
 echo "connects (e.g. \`ssh router $BIN_DIR/axos-mcp\`), since it talks over"

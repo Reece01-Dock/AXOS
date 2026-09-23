@@ -40,13 +40,14 @@ firmware/
     └── am-toolchains/       # git submodule — pinned to an exact upstream commit
 ```
 
-`firmware/src/go.mod` exists only so `go build/vet/test ./...` run from the
-AXOS repo root doesn't sweep in stray Go source that ships inside the
+`firmware/src/go.mod` (and the sibling `firmware/src-stock/go.mod` for the
+local stock Merlin clone) exist only so `go build/vet/test ./...` run from
+the AXOS repo root doesn't sweep in stray Go source that ships inside the
 vendored trees (e.g. `asuswrt-merlin.ng`'s `wireguard-tools/contrib/external-tests`,
 which has unmet third-party dependencies and isn't meant to build as part of
-AXOS). It marks `firmware/src/` as a separate Go module with no dependents —
+AXOS). They mark those directories as separate Go modules with no dependents —
 Go's `./...` pattern skips subtrees below a nested `go.mod` automatically.
-Don't remove it without re-checking `go build ./...` from the repo root.
+Don't remove them without re-checking `go build ./...` from the repo root.
 
 `firmware/src/asuswrt-merlin.ng` and `firmware/src/am-toolchains` are **git
 submodules** (see `.gitmodules` at the repo root), each pinned to one exact

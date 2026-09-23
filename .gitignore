@@ -7,7 +7,8 @@
 /firmware/out-stock/
 # Separate pristine Merlin tree for stock (unpatched) baseline builds.
 # Not a submodule — local clone of an upstream release tag.
-/firmware/src-stock/
+/firmware/src-stock/**
+!/firmware/src-stock/go.mod
 /firmware/.sources-pinned
 # axos-build.sh's own state (lock, last-run.json, per-run logs) and the
 # persistent ccache directory build.sh bind-mounts into the container —
