@@ -44,7 +44,11 @@ func (s *Server) registerM3Routes() {
 		return s.Backend.PolicyRoutes(ctx)
 	}))
 	s.mux.HandleFunc("POST /v1/policy", s.handleSetPolicyRoute)
+	s.mux.HandleFunc("POST /v1/policy/bulk", s.handlePolicyBulk)
 	s.mux.HandleFunc("DELETE /v1/policy/{id}", s.handleDeletePolicyRoute)
+
+	s.mux.HandleFunc("GET /v1/vpn/client-groups", s.handleGetClientGroups)
+	s.mux.HandleFunc("PUT /v1/vpn/client-groups", s.handlePutClientGroups)
 
 	s.mux.HandleFunc("POST /v1/diag/ping", s.handleDiagPing)
 	s.mux.HandleFunc("POST /v1/diag/traceroute", s.handleDiagTraceroute)

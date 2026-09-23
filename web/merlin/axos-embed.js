@@ -40,6 +40,9 @@
   function post(path, body) {
     return req("POST", path, body || {});
   }
+  function put(path, body) {
+    return req("PUT", path, body || {});
+  }
   function del(path) {
     return req("DELETE", path);
   }
@@ -219,6 +222,138 @@
     });
     document.getElementById("axos-vpn-body").innerHTML =
       html || "<tr><td colspan='5'>No profiles</td></tr>";
+    fillSteerIface(profiles);
+  }
+
+  var steerGroups = [];
+  var steerClients = [];
+  var steerPolicy = [];
+
+  function directorIface(name) {
+    if (!name) return "WAN";
+    var n = String(name).toLowerCase();
+    if (n === "wan") return "WAN";
+    if (n.indexOf("wgc") === 0) return "WGC" + n.replace("wgc", "");
+    if (n.indexOf("ovpnc") === 0) return "OVPN" + n.replace("ovpnc", "");
+    return String(name).toUpperCase();
+  }
+
+  function fillSteerIface(profiles) {
+    var sel = document.getElementById("axos-steer-iface");
+    if (!sel) return;
+    var cur = sel.value || "WAN";
+    var opts = '<option value="WAN">WAN (no VPN)</option>';
+    (profiles || []).forEach(function (p) {
+      var v = directorIface(p.name);
+      var label = v + (p.description ? " - " + p.description : "") + (p.type ? " [" + p.type + "]" : "");
+      opts += '<option value="' + esc(v) + '">' + esc(label) + "</option>";
+    });
+    sel.innerHTML = opts;
+    if (cur) sel.value = cur;
+  }
+
+  function policyForClient(c) {
+    var mac = (c.mac || "").toLowerCase();
+    var ip = (c.ip || "").toLowerCase();
+    for (var i = 0; i < steerPolicy.length; i++) {
+      var s = String(steerPolicy[i].source || "").toLowerCase();
+      if (s && (s === mac || s === ip)) return steerPolicy[i];
+    }
+    return null;
+  }
+
+  function renderSteer(clients, policy) {
+    steerClients = clients || [];
+    steerPolicy = policy || [];
+    var body = document.getElementById("axos-steer-body");
+    if (!body) return;
+    var html = "";
+    steerClients.forEach(function (c, idx) {
+      var pol = policyForClient(c);
+      var route = pol ? pol.interface + (pol.enabled === false ? " (off)" : "") : "WAN (default)";
+      html +=
+        "<tr><td><input type='checkbox' class='axos-steer-cb' data-idx='" +
+        idx +
+        "' data-mac='" +
+        esc(c.mac) +
+        "'></td><td>" +
+        esc(c.hostname || "-") +
+        "</td><td>" +
+        esc(c.ip || "-") +
+        "</td><td>" +
+        esc(c.mac || "-") +
+        "</td><td>" +
+        esc(route) +
+        "</td></tr>";
+    });
+    body.innerHTML = html || "<tr><td colspan='5'>No clients</td></tr>";
+  }
+
+  function fillGroupSel() {
+    var sel = document.getElementById("axos-group-sel");
+    if (!sel) return;
+    var cur = sel.value;
+    var opts = '<option value="">- none -</option>';
+    steerGroups.forEach(function (g) {
+      opts +=
+        '<option value="' +
+        esc(g.id) +
+        '">' +
+        esc(g.name) +
+        " (" +
+        (g.members || []).length +
+        ")</option>";
+    });
+    sel.innerHTML = opts;
+    if (cur) sel.value = cur;
+  }
+
+  function selectedMACs() {
+    var macs = [];
+    var boxes = document.querySelectorAll(".axos-steer-cb:checked");
+    for (var i = 0; i < boxes.length; i++) {
+      var m = boxes[i].getAttribute("data-mac");
+      if (m) macs.push(m);
+    }
+    return macs;
+  }
+
+  function setSteerChecks(macs) {
+    var want = {};
+    (macs || []).forEach(function (m) {
+      want[String(m).toLowerCase()] = true;
+    });
+    var boxes = document.querySelectorAll(".axos-steer-cb");
+    for (var i = 0; i < boxes.length; i++) {
+      var m = (boxes[i].getAttribute("data-mac") || "").toLowerCase();
+      boxes[i].checked = !!want[m];
+    }
+  }
+
+  function applySteer(iface, desc) {
+    var macs = selectedMACs();
+    var st = document.getElementById("axos-steer-status");
+    if (!macs.length) {
+      alert("Select at least one client");
+      return;
+    }
+    if (st) st.textContent = "applying " + macs.length + "...";
+    withRollback("merlin-ui-steer", function () {
+      return post("/v1/policy/bulk", {
+        interface: iface,
+        description: desc || "axos",
+        sources: macs,
+        enabled: true,
+      });
+    })
+      .then(function (r) {
+        if (st) st.textContent = "ok · " + ((r && r.applied) || macs.length) + " → " + iface;
+        refresh();
+      })
+      .catch(function (e) {
+        if (st) st.textContent = String(e.message || e);
+        alert(String(e.message || e));
+      });
   }
 
   function renderDhcp(list) {
@@ -304,8 +439,8 @@
       get("/v1/policy").catch(function () {
         return [];
       }),
-      get("/v1/firewall").catch(function () {
-        return [];
+      get("/v1/vpn/client-groups").catch(function () {
+        return { groups: [] };
       }),
     ])
       .then(function (all) {
@@ -319,13 +454,18 @@
           dhcp = all[7] || [],
           backups = all[8] || [],
           policy = all[9] || [],
-          firewall = all[10] || [];
+          firewall = all[10] || [],
+          groupsWrap = all[11] || {};
+
+        steerGroups = groupsWrap.groups || [];
+        fillGroupSel();
 
         renderSys(info);
         renderRes(res);
         renderWifi(wifi);
         renderClients(clients);
         renderVpn(profiles);
+        renderSteer(clients, policy);
         renderDhcp(dhcp);
         renderPolicy(policy);
         renderFw(firewall);
@@ -433,6 +573,93 @@
       bindVpnButtons();
       bindDhcpDelete();
       bindPolicyDelete();
+
+      on("axos-steer-vpn", function () {
+        var iface = document.getElementById("axos-steer-iface").value || "WAN";
+        if (iface === "WAN") {
+          alert("Pick a VPN tunnel (e.g. WGC5 for Cloudflare), not WAN");
+          return;
+        }
+        applySteer(iface, "axos-vpn");
+      });
+      on("axos-steer-wan", function () {
+        applySteer("WAN", "axos-wan");
+      });
+      on("axos-steer-all", function () {
+        var boxes = document.querySelectorAll(".axos-steer-cb");
+        for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
+      });
+      on("axos-steer-none", function () {
+        var boxes = document.querySelectorAll(".axos-steer-cb");
+        for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+      });
+      on("axos-group-save", function () {
+        var name = (document.getElementById("axos-group-name").value || "").trim();
+        var macs = selectedMACs();
+        if (!name) {
+          alert("Group name required");
+          return;
+        }
+        if (!macs.length) {
+          alert("Select clients to save in the group");
+          return;
+        }
+        var id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "group";
+        var iface = document.getElementById("axos-steer-iface").value || "";
+        var next = steerGroups.slice();
+        var found = false;
+        for (var i = 0; i < next.length; i++) {
+          if (next[i].id === id || next[i].name === name) {
+            next[i] = { id: next[i].id || id, name: name, members: macs, interface: iface };
+            found = true;
+            break;
+          }
+        }
+        if (!found) next.push({ id: id, name: name, members: macs, interface: iface });
+        put("/v1/vpn/client-groups", { groups: next })
+          .then(function (r) {
+            steerGroups = (r && r.groups) || next;
+            fillGroupSel();
+            document.getElementById("axos-group-sel").value = id;
+            document.getElementById("axos-group-name").value = "";
+            alert("Saved group " + name);
+          })
+          .catch(function (e) {
+            alert(String(e.message || e));
+          });
+      });
+      on("axos-group-load", function () {
+        var id = document.getElementById("axos-group-sel").value;
+        if (!id) return;
+        var g = null;
+        for (var i = 0; i < steerGroups.length; i++) {
+          if (steerGroups[i].id === id) {
+            g = steerGroups[i];
+            break;
+          }
+        }
+        if (!g) return;
+        setSteerChecks(g.members || []);
+        if (g.interface) {
+          var sel = document.getElementById("axos-steer-iface");
+          if (sel) sel.value = directorIface(g.interface);
+        }
+      });
+      on("axos-group-del", function () {
+        var id = document.getElementById("axos-group-sel").value;
+        if (!id || !confirm("Delete group " + id + "?")) return;
+        var next = steerGroups.filter(function (g) {
+          return g.id !== id;
+        });
+        put("/v1/vpn/client-groups", { groups: next })
+          .then(function (r) {
+            steerGroups = (r && r.groups) || next;
+            fillGroupSel();
+          })
+          .catch(function (e) {
+            alert(String(e.message || e));
+          });
+      });
 
       on("axos-dns-apply", function () {
       var wan = document.getElementById("axos-dns-wan").value.trim().split(/\s+/).filter(Boolean);

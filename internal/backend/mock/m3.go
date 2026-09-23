@@ -284,6 +284,15 @@ func (b *Backend) PolicyRoutes(_ context.Context) ([]backend.PolicyRoute, error)
 func (b *Backend) SetPolicyRoute(_ context.Context, r backend.PolicyRoute) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if r.ID == "" && r.Source != "" {
+		src := strings.ToLower(strings.TrimSpace(r.Source))
+		for i := range b.policy {
+			if strings.ToLower(strings.TrimSpace(b.policy[i].Source)) == src {
+				r.ID = b.policy[i].ID
+				break
+			}
+		}
+	}
 	if r.ID != "" {
 		for i := range b.policy {
 			if b.policy[i].ID == r.ID {
@@ -291,7 +300,8 @@ func (b *Backend) SetPolicyRoute(_ context.Context, r backend.PolicyRoute) error
 				return nil
 			}
 		}
-	} else {
+	}
+	if r.ID == "" {
 		r.ID = fmt.Sprintf("%d", len(b.policy)+1)
 	}
 	b.policy = append(b.policy, r)

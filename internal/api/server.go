@@ -59,6 +59,9 @@ type Server struct {
 	// Merlin-embedded UI (non-loopback clients must send X-Axos-UI-Token).
 	// Loopback (MCP / SSH tunnel) never requires the token.
 	UITokenFile string
+	// DataDir is the AXOS state root (e.g. /jffs/axos). Used for client
+	// groups and other small JSON state under DataDir/run/.
+	DataDir string
 
 	local *rollbackctl.Local // reuses the same snapshot-then-arm composition Local implements
 	mux   *http.ServeMux

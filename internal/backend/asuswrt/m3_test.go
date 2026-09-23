@@ -74,6 +74,19 @@ func TestFormatVPNDirectorRuleList_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestNormalizeDirectorIface(t *testing.T) {
+	cases := map[string]string{
+		"wan": "WAN", "WAN": "WAN",
+		"wgc5": "WGC5", "WGC5": "WGC5",
+		"ovpnc1": "OVPN1", "OVPN1": "OVPN1", "ovpn2": "OVPN2",
+	}
+	for in, want := range cases {
+		if got := normalizeDirectorIface(in); got != want {
+			t.Errorf("normalizeDirectorIface(%q)=%q want %q", in, got, want)
+		}
+	}
+}
+
 func TestDNSInfoFromNVRAM(t *testing.T) {
 	nv := map[string]string{
 		"wan0_dns":        "1.1.1.1 1.0.0.1",

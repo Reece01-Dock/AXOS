@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -132,6 +133,9 @@ func runServe(args []string) {
 	server.Footprint = fp
 	server.SetUI(resolveUIFS(*uiDir))
 	server.UITokenFile = *uiTokenFile
+	if beOpts.BackupDir != "" {
+		server.DataDir = filepath.Dir(beOpts.BackupDir)
+	}
 
 	sup := supervisor.New(*serviceLogDir)
 	specs, err := svcconfig.Load(*servicesConfig)

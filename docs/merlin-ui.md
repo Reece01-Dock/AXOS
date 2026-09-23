@@ -5,7 +5,7 @@ already live — not only under Administration:
 
 | Merlin menu | AXOS focus | Overlay page (basename) |
 |---|---|---|
-| **VPN** | profiles, Director, endpoint ping | `Advanced_VPN_PPTP.asp` |
+| **VPN** | profiles, client→tunnel routing / groups, Director, endpoint ping | `Advanced_VPN_PPTP.asp` |
 | **LAN** | DHCP reservations + clients | `Advanced_APPList_Content.asp` |
 | **WAN** | DNS upstreams / DoT | `WAN_info.asp` |
 | **Firewall** | filter preview | `Advanced_VPN_IPSec.asp` |

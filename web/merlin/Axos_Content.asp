@@ -158,6 +158,52 @@ function initial(){
 							</table>
 
 							<table data-axos="vpn" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="2">Client VPN routing</td></tr></thead>
+								<tbody>
+									<tr>
+										<th>Tunnel</th>
+										<td>
+											<select id="axos-steer-iface" class="input_option">
+												<option value="WAN">WAN (no VPN)</option>
+											</select>
+											<span class="hint">Cloudflare WARP = your WireGuard slot (e.g. WGC5)</span>
+										</td>
+									</tr>
+									<tr>
+										<th>Group</th>
+										<td>
+											<select id="axos-group-sel" class="input_option">
+												<option value="">— none —</option>
+											</select>
+											<input type="text" id="axos-group-name" placeholder="new group name" class="input_15_table" />
+											<input type="button" class="button_gen" id="axos-group-save" value="Save selection as group">
+											<input type="button" class="button_gen" id="axos-group-load" value="Select group">
+											<input type="button" class="button_gen" id="axos-group-del" value="Delete group">
+										</td>
+									</tr>
+									<tr>
+										<th>Apply</th>
+										<td>
+											<input type="button" class="button_gen" id="axos-steer-vpn" value="Send selected → tunnel">
+											<input type="button" class="button_gen" id="axos-steer-wan" value="Send selected → WAN">
+											<input type="button" class="button_gen" id="axos-steer-all" value="Select all">
+											<input type="button" class="button_gen" id="axos-steer-none" value="Clear">
+											<span id="axos-steer-status" class="hint"></span>
+										</td>
+									</tr>
+								</tbody>
+							</table>
+
+							<table data-axos="vpn" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="5">Clients (pick who uses the tunnel)</td></tr>
+								<tr>
+									<th></th><th>Hostname</th><th>IP</th><th>MAC</th><th>Current route</th>
+								</tr>
+								</thead>
+								<tbody id="axos-steer-body"></tbody>
+							</table>
+
+							<table data-axos="vpn" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="2">VPN endpoint ping</td></tr></thead>
 								<tbody>
 									<tr>
