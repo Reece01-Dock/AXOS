@@ -42,16 +42,27 @@ func TestLANAuth_LANRequiresToken(t *testing.T) {
 		t.Fatalf("no token status = %d, want 401", rr.Code)
 	}
 
-	req2 := httptest.NewRequest(http.MethodGet, "/v1/info", nil)
-	req2.RemoteAddr = "192.168.50.10:9999"
-	req2.Header.Set(uiTokenHeader, "secret-token")
-	req2.Header.Set("Origin", "http://192.168.50.1")
-	rr2 := httptest.NewRecorder()
-	h.ServeHTTP(rr2, req2)
-	if rr2.Code != http.StatusOK {
-		t.Fatalf("with token status = %d, want 200", rr2.Code)
-	}
-	if rr2.Header().Get("Access-Control-Allow-Origin") != "http://192.168.50.1" {
-		t.Fatalf("missing CORS origin, got %q", rr2.Header().Get("Access-Control-Allow-Origin"))
+	for _, origin := range []string{"http://192.168.50.1", "http://www.asusrouter.com"} {
+		req2 := httptest.NewRequest(http.MethodOptions, "/v1/info", nil)
+		req2.RemoteAddr = "192.168.50.10:9999"
+		req2.Header.Set("Origin", origin)
+		rr2 := httptest.NewRecorder()
+		h.ServeHTTP(rr2, req2)
+		if rr2.Code != http.StatusNoContent {
+			t.Fatalf("OPTIONS %s status = %d", origin, rr2.Code)
+		}
+		if rr2.Header().Get("Access-Control-Allow-Origin") != origin {
+			t.Fatalf("OPTIONS %s missing CORS, got %q", origin, rr2.Header().Get("Access-Control-Allow-Origin"))
+		}
+
+		req3 := httptest.NewRequest(http.MethodGet, "/v1/info", nil)
+		req3.RemoteAddr = "192.168.50.10:9999"
+		req3.Header.Set(uiTokenHeader, "secret-token")
+		req3.Header.Set("Origin", origin)
+		rr3 := httptest.NewRecorder()
+		h.ServeHTTP(rr3, req3)
+		if rr3.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want 200", origin, rr3.Code)
+		}
 	}
 }

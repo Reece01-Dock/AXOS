@@ -93,11 +93,18 @@ func originOK(origin string) bool {
 		host = rest
 	}
 	host = strings.Trim(host, "[]")
+	hostLower := strings.ToLower(host)
+
 	ip := net.ParseIP(host)
 	if ip != nil {
 		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
 	}
-	if strings.HasSuffix(host, ".asus.com") || host == "router.asus.com" {
+
+	// Merlin admin hostnames (www.asusrouter.com, router.asus.com, …)
+	if hostLower == "asusrouter.com" ||
+		strings.HasSuffix(hostLower, ".asusrouter.com") ||
+		hostLower == "router.asus.com" ||
+		strings.HasSuffix(hostLower, ".asus.com") {
 		return true
 	}
 	return false

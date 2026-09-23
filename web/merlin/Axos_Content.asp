@@ -21,7 +21,12 @@
 <script type="text/javascript" src="/userRpm/axos-embed.js"></script>
 <script>
 function initial(){
-	show_menu();
+	try {
+		show_menu();
+	} catch (e) {
+		// Stale Session menuList or unmatched tab — still show AXOS content.
+		if (window.console && console.warn) console.warn("show_menu:", e);
+	}
 	axosEmbedInit();
 }
 </script>
@@ -32,7 +37,7 @@ function initial(){
 <iframe name="hidden_frame" id="hidden_frame" src="" width="0" height="0" frameborder="0"></iframe>
 
 <form method="post" name="form" action="/start_apply.htm" target="hidden_frame">
-<input type="hidden" name="current_page" value="userRpm/Axos_Content.asp">
+<input type="hidden" name="current_page" value="Main_GameServer_Content.asp">
 <input type="hidden" name="next_page" value="">
 <input type="hidden" name="group_id" value="">
 <input type="hidden" name="modified" value="0">
