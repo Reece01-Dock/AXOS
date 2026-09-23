@@ -78,6 +78,8 @@ Common flags:
                             app.js). If set and the directory exists, serve from disk
                             (hot-deploy under <axos-root>/www/). Otherwise use the
                             assets embedded in this binary.
+  -ui-token-file string   Non-loopback API clients must send X-Axos-UI-Token
+                            (Merlin UI embed). Loopback never requires it.
   -services-config string  Path to a JSON file registering hot-deployable
                             sibling services for axosd to supervise (optional —
                             see internal/svcconfig; empty/missing is normal)
@@ -101,6 +103,7 @@ func runServe(args []string) {
 	auditPath := flagSet.String("audit", "./axosd-audit.jsonl", "Path to the append-only audit log")
 	apiAddr := flagSet.String("api-addr", "127.0.0.1:9090", "Address the Core API listens on")
 	uiDir := flagSet.String("ui-dir", "", "Directory of web UI static assets; if set and exists, serve from disk, else embedded web.FS")
+	uiTokenFile := flagSet.String("ui-token-file", "", "If set, non-loopback API clients must send X-Axos-UI-Token (Merlin UI); loopback never requires it")
 	servicesConfig := flagSet.String("services-config", "", "Path to a JSON file registering supervised sibling services (optional)")
 	serviceLogDir := flagSet.String("service-log-dir", "", "Directory for supervised services' logs (optional)")
 	footprintPath := flagSet.String("footprint", "./axosd-footprint.jsonl", "Path to the append-only RAM footprint log")
@@ -128,6 +131,7 @@ func runServe(args []string) {
 	server := api.NewServer(be, rb, al)
 	server.Footprint = fp
 	server.SetUI(resolveUIFS(*uiDir))
+	server.UITokenFile = *uiTokenFile
 
 	sup := supervisor.New(*serviceLogDir)
 	specs, err := svcconfig.Load(*servicesConfig)

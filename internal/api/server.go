@@ -55,6 +55,10 @@ type Server struct {
 	// GET /ui/*. Nil means those routes 404 — /v1/* and /healthz are
 	// unaffected either way.
 	uiFS fs.FS
+	// UITokenFile, when set, enables LAN access to the Core API for the
+	// Merlin-embedded UI (non-loopback clients must send X-Axos-UI-Token).
+	// Loopback (MCP / SSH tunnel) never requires the token.
+	UITokenFile string
 
 	local *rollbackctl.Local // reuses the same snapshot-then-arm composition Local implements
 	mux   *http.ServeMux
@@ -77,7 +81,15 @@ func NewServer(be backend.RouterBackend, rb *rollback.Engine, al *audit.Logger) 
 }
 
 // Handler returns the http.Handler to serve — pass to http.Server.Handler.
-func (s *Server) Handler() http.Handler { return s.mux }
+// When UITokenFile is set, the handler is wrapped with LANAuth (CORS +
+// token gate for non-loopback callers).
+func (s *Server) Handler() http.Handler {
+	h := http.Handler(s.mux)
+	if s.UITokenFile != "" {
+		h = &LANAuth{Inner: h, TokenFile: s.UITokenFile}
+	}
+	return h
+}
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)

@@ -559,9 +559,11 @@ KEEP OR REVERT → CONTINUE. No unbenchmarked "tuning".
 ## Later / continuous
 
 - [x] AXOS web UI (Phase 7) — thin Core API client at `/` (same backend as
-      MCP/CLI). Custom **ASUS httpd** UI sections remain separate (below).
-- [ ] Custom AXOS sections inside the stock ASUS httpd UI (security
-      checklist in `docs/security.md` "Future: web UI security requirements")
+      MCP/CLI).
+- [x] Custom AXOS sections inside the stock ASUS httpd UI — **AXOS → Control**
+      menu via JFFS bind-mount (`docs/merlin-ui.md`); iterate with
+      `deploy-router.sh`, no firmware rebuild. Session-gated Merlin page +
+      LAN API token (`X-Axos-UI-Token`).
 - [ ] Package/module system for optional functionality
 - [ ] Historical metrics on USB storage (never internal flash)
 - [ ] Backup encryption at rest, once a key-management approach is decided

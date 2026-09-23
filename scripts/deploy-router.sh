@@ -58,15 +58,31 @@ ssh $SSH_OPTS "$ROUTER" "'$REMOTE_ROOT/bin/axosctl' deploy -root '$REMOTE_ROOT' 
 ssh $SSH_OPTS "$ROUTER" "sh -s" <<EOF
 set -e
 ROOT='$REMOTE_ROOT'
-# Ensure bin/axosctl exists for the next promote (copy once from current).
-mkdir -p "\$ROOT/bin"
+mkdir -p "\$ROOT/bin" "\$ROOT/merlin-ui" "\$ROOT/www" "\$ROOT/run"
 if [ -x "\$ROOT/current/bin/axosctl" ]; then
   cp -a "\$ROOT/current/bin/axosctl" "\$ROOT/bin/axosctl"
 fi
-# Drop duplicate axosd/axos-mcp from bin/ — bootstrap prefers current/bin.
 rm -f "\$ROOT/bin/axosd" "\$ROOT/bin/axos-mcp"
+# Hot-deploy Merlin UI + helper scripts (no firmware flash).
+if [ -d "\$ROOT/current/merlin-ui" ]; then
+  cp -a "\$ROOT/current/merlin-ui/." "\$ROOT/merlin-ui/"
+fi
+if [ -d "\$ROOT/current/www" ]; then
+  cp -a "\$ROOT/current/www/." "\$ROOT/www/"
+fi
+# Helper scripts always from the repo copy pushed beside this script? Prefer
+# keeping them under bin/ from the host deploy (see below).
 df -h /jffs | tail -1
 EOF
+
+# Refresh bootstrap + Merlin UI helper on the router (tiny shell scripts).
+scp $SSH_OPTS "$HERE/scripts/router/axos-bootstrap.sh" "$HERE/scripts/router/axos-merlin-ui.sh" \
+  "${ROUTER}:$REMOTE_ROOT/bin/" 2>/dev/null || {
+  # scp may be missing OpenSSH -O; fall back to tar pipe
+  tar -C "$HERE/scripts/router" -cf - axos-bootstrap.sh axos-merlin-ui.sh \
+    | ssh $SSH_OPTS "$ROUTER" "tar -C '$REMOTE_ROOT/bin' -xf - && chmod 755 '$REMOTE_ROOT/bin/axos-bootstrap.sh' '$REMOTE_ROOT/bin/axos-merlin-ui.sh'"
+}
+ssh $SSH_OPTS "$ROUTER" "chmod 755 '$REMOTE_ROOT/bin/axos-bootstrap.sh' '$REMOTE_ROOT/bin/axos-merlin-ui.sh' 2>/dev/null; ln -sf axos-bootstrap.sh '$REMOTE_ROOT/bin/axos-bootstrap' 2>/dev/null || cp -a '$REMOTE_ROOT/bin/axos-bootstrap.sh' '$REMOTE_ROOT/bin/axos-bootstrap'"
 
 echo ""
 echo "==> Deployed. Nothing was restarted automatically — restart what changed:"

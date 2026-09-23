@@ -123,8 +123,9 @@ func buildComponents(outDir string, components []string, goos, goarch string) er
 	return nil
 }
 
-// stageWebUI copies repo web/ static assets (html/css/js, not embed.go)
-// into staging/www/ for Phase 7 hot-deploy under <axos-root>/www/.
+// stageWebUI copies repo web/ static assets into staging/www/ (standalone
+// Phase 7 UI) and web/merlin/* into staging/merlin-ui/ (Merlin httpd embed,
+// hot-deployed via bind-mount — see scripts/router/axos-merlin-ui.sh).
 func stageWebUI(outDir string) error {
 	wwwDir := filepath.Join(outDir, "www")
 	if err := os.MkdirAll(wwwDir, 0755); err != nil {
@@ -143,6 +144,30 @@ func stageWebUI(outDir string) error {
 		}
 	}
 	fmt.Printf("    staged web UI -> %s\n", wwwDir)
+
+	merlinDir := filepath.Join(outDir, "merlin-ui")
+	if err := os.MkdirAll(merlinDir, 0755); err != nil {
+		return err
+	}
+	repoMerlin := filepath.Join("web", "merlin")
+	entries, err := os.ReadDir(repoMerlin)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", repoMerlin, err)
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		data, err := os.ReadFile(filepath.Join(repoMerlin, name))
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(merlinDir, name), data, 0644); err != nil {
+			return err
+		}
+	}
+	fmt.Printf("    staged Merlin UI -> %s\n", merlinDir)
 	return nil
 }
 
