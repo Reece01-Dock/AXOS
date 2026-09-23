@@ -59,7 +59,7 @@ function initial(){
 				<tbody>
 				<tr>
 					<td bgcolor="#4D595D" valign="top">
-						<div class="formfonttitle">AXOS — __AXOS_TITLE__</div>
+						<div class="formfonttitle">AXOS - __AXOS_TITLE__</div>
 						<div style="margin:10px 0 10px 5px;" class="splitLine"></div>
 						<div class="formfontdesc">
 							__AXOS_DESC__
@@ -69,14 +69,14 @@ function initial(){
 						<div id="axos-root">
 							<div class="axos-toolbar">
 								<input type="button" class="button_gen" id="axos-refresh" value="Refresh">
-								<span id="axos-status" class="axos-status">connecting…</span>
+								<span id="axos-status" class="axos-status">connecting...</span>
 								<a id="axos-full-link" class="hint" href="/Main_GameServer_Content.asp" style="display:none">Full AXOS panel</a>
 							</div>
 
 							<table data-axos="system" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="2">System</td></tr></thead>
 								<tbody id="axos-sys-body">
-									<tr><th>Status</th><td>Loading…</td></tr>
+									<tr><th>Status</th><td>Loading...</td></tr>
 								</tbody>
 							</table>
 
@@ -97,7 +97,7 @@ function initial(){
 									</tr>
 									<tr>
 										<th>DoT</th>
-										<td id="axos-dns-dot">—</td>
+										<td id="axos-dns-dot">-</td>
 									</tr>
 									<tr>
 										<th>Apply</th>
@@ -116,7 +116,7 @@ function initial(){
 											<input type="button" class="button_gen" id="axos-qos-apply" value="Apply QoS" style="margin-left:12px">
 										</td>
 									</tr>
-									<tr><th>Mode</th><td id="axos-qos-mode">—</td></tr>
+									<tr><th>Mode</th><td id="axos-qos-mode">-</td></tr>
 								</tbody>
 							</table>
 
@@ -134,7 +134,7 @@ function initial(){
 									</tr>
 									<tr>
 										<th>Result</th>
-										<td><pre id="axos-diag" class="axos-pre">—</pre></td>
+										<td><pre id="axos-diag" class="axos-pre">-</pre></td>
 									</tr>
 								</tbody>
 							</table>
@@ -169,7 +169,7 @@ function initial(){
 											<span class="hint">space-separated</span>
 										</td>
 									</tr>
-									<tr><th>Result</th><td><pre id="axos-ep-out" class="axos-pre">—</pre></td></tr>
+									<tr><th>Result</th><td><pre id="axos-ep-out" class="axos-pre">-</pre></td></tr>
 								</tbody>
 							</table>
 
@@ -224,7 +224,7 @@ function initial(){
 											<span id="axos-backup-status" class="hint"></span>
 										</td>
 									</tr>
-									<tr><th>Known backups</th><td><pre id="axos-backups" class="axos-pre">—</pre></td></tr>
+									<tr><th>Known backups</th><td><pre id="axos-backups" class="axos-pre">-</pre></td></tr>
 								</tbody>
 							</table>
 						</div>

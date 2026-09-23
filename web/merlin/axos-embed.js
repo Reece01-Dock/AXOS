@@ -1,4 +1,4 @@
-/* AXOS Merlin embed — Core API on :9090 with UI token (LANAuth). */
+/* AXOS Merlin embed - Core API on :9090 with UI token (LANAuth). */
 (function (global) {
   function apiBase() {
     return "http://" + (window.location.hostname || "192.168.50.1") + ":9090";
@@ -74,7 +74,7 @@
   }
 
   function fmtUptime(ns) {
-    if (!ns) return "—";
+    if (!ns) return "-";
     var sec = Math.floor(Number(ns) / 1e9);
     var d = Math.floor(sec / 86400);
     var h = Math.floor((sec % 86400) / 3600);
@@ -100,7 +100,7 @@
     );
   }
 
-  // Section → which data-axos panels to show (comma list). "all" = everything.
+  // Section -> which data-axos panels to show (comma list). "all" = everything.
   var SECTION_PANELS = {
     all: null,
     vpn: "vpn",
@@ -144,7 +144,7 @@
   function renderRes(res) {
     var temps = res.temperatures_c || {};
     var tparts = [];
-    for (var k in temps) tparts.push(k + "=" + temps[k] + "°C");
+    for (var k in temps) tparts.push(k + "=" + temps[k] + "C");
     document.getElementById("axos-res-body").innerHTML = kvRows([
       ["Load (1/5/15)", [res.cpu_load_1m, res.cpu_load_5m, res.cpu_load_15m].join(" / ")],
       [
@@ -154,7 +154,7 @@
           Math.round((res.mem_total_kb || 0) / 1024) +
           " MB",
       ],
-      ["Temperatures", tparts.join(", ") || "—"],
+      ["Temperatures", tparts.join(", ") || "-"],
     ]);
   }
 
@@ -167,9 +167,9 @@
         " (" +
         esc(r.band || "") +
         ")</td><td>" +
-        esc(r.ssid || "—") +
+        esc(r.ssid || "-") +
         "</td><td>" +
-        esc(r.channel != null ? r.channel : "—") +
+        esc(r.channel != null ? r.channel : "-") +
         "</td><td>" +
         esc(r.client_count != null ? r.client_count : 0) +
         "</td></tr>";
@@ -183,13 +183,13 @@
     (clients || []).slice(0, 40).forEach(function (c) {
       html +=
         "<tr><td>" +
-        esc(c.hostname || "—") +
+        esc(c.hostname || "-") +
         "</td><td>" +
-        esc(c.ip || "—") +
+        esc(c.ip || "-") +
         "</td><td>" +
-        esc(c.mac || "—") +
+        esc(c.mac || "-") +
         "</td><td>" +
-        esc(c.interface || "—") +
+        esc(c.interface || "-") +
         "</td></tr>";
     });
     document.getElementById("axos-clients-body").innerHTML =
@@ -205,7 +205,7 @@
         "</td><td>" +
         esc(p.type) +
         "</td><td>" +
-        esc(p.endpoint || p.description || "—") +
+        esc(p.endpoint || p.description || "-") +
         "</td><td>" +
         (p.enabled ? "yes" : "no") +
         '</td><td class="axos-actions">' +
@@ -230,10 +230,10 @@
         "</td><td>" +
         esc(r.ip) +
         "</td><td>" +
-        esc(r.hostname || "—") +
+        esc(r.hostname || "-") +
         '</td><td><input type="button" class="button_gen axos-dhcp-del" data-mac="' +
         esc(r.mac) +
-        '" value="Delete"></td></tr>";
+        '" value="Delete"></td></tr>';
     });
     document.getElementById("axos-dhcp-body").innerHTML =
       html || "<tr><td colspan='4'>None</td></tr>";
@@ -252,7 +252,7 @@
         "</td><td>" +
         (r.enabled ? "yes" : "no") +
         "</td><td>" +
-        esc(r.description || "—") +
+        esc(r.description || "-") +
         '</td><td><input type="button" class="button_gen axos-pol-del" data-id="' +
         esc(r.id) +
         '" value="Delete"></td></tr>';
@@ -280,7 +280,7 @@
   }
 
   function refresh() {
-    setStatus("loading…", false);
+    setStatus("loading...", false);
     Promise.all([
       get("/v1/info"),
       get("/v1/resources"),
@@ -336,7 +336,7 @@
           : "disabled";
         document.getElementById("axos-qos-enable").checked = !!qos.enabled;
         document.getElementById("axos-qos-mode").textContent =
-          "mode=" + (qos.mode != null ? qos.mode : "—");
+          "mode=" + (qos.mode != null ? qos.mode : "-");
 
         document.getElementById("axos-backups").textContent =
           backups.length === 0
@@ -348,7 +348,7 @@
                 })
                 .join("\n");
 
-        setStatus("live · " + (info.model || "?"), true);
+        setStatus("live - " + (info.model || "?"), true);
       })
       .catch(function (err) {
         setStatus("error: " + err.message, false);
@@ -356,7 +356,9 @@
   }
 
   function bindVpnButtons() {
-    document.getElementById("axos-vpn-body").onclick = function (ev) {
+    var body = document.getElementById("axos-vpn-body");
+    if (!body) return;
+    body.onclick = function (ev) {
       var t = ev.target;
       if (!t || !t.className) return;
       var name = t.getAttribute("data-name");
@@ -381,7 +383,9 @@
   }
 
   function bindDhcpDelete() {
-    document.getElementById("axos-dhcp-body").onclick = function (ev) {
+    var body = document.getElementById("axos-dhcp-body");
+    if (!body) return;
+    body.onclick = function (ev) {
       var t = ev.target;
       if (!t || t.className.indexOf("axos-dhcp-del") < 0) return;
       var mac = t.getAttribute("data-mac");
@@ -397,7 +401,9 @@
   }
 
   function bindPolicyDelete() {
-    document.getElementById("axos-policy-body").onclick = function (ev) {
+    var body = document.getElementById("axos-policy-body");
+    if (!body) return;
+    body.onclick = function (ev) {
       var t = ev.target;
       if (!t || t.className.indexOf("axos-pol-del") < 0) return;
       var id = t.getAttribute("data-id");
@@ -420,16 +426,22 @@
   }
 
   global.axosEmbedInit = function () {
-    if (!token()) setStatus("missing UI token — run axos-merlin-ui.sh", false);
+    try {
+      if (!token()) setStatus("missing UI token - run axos-merlin-ui.sh", false);
 
-    applySection();
+      applySection();
 
-    document.getElementById("axos-refresh").onclick = refresh;
-    bindVpnButtons();
-    bindDhcpDelete();
-    bindPolicyDelete();
+      function on(id, fn) {
+        var el = document.getElementById(id);
+        if (el) el.onclick = fn;
+      }
 
-    document.getElementById("axos-dns-apply").onclick = function () {
+      on("axos-refresh", refresh);
+      bindVpnButtons();
+      bindDhcpDelete();
+      bindPolicyDelete();
+
+      on("axos-dns-apply", function () {
       var wan = document.getElementById("axos-dns-wan").value.trim().split(/\s+/).filter(Boolean);
       withRollback("merlin-ui-dns", function () {
         return get("/v1/dns").then(function (cur) {
@@ -450,9 +462,9 @@
         .catch(function (e) {
           alert(String(e.message || e));
         });
-    };
+    });
 
-    document.getElementById("axos-qos-apply").onclick = function () {
+      on("axos-qos-apply", function () {
       var enabled = document.getElementById("axos-qos-enable").checked;
       withRollback("merlin-ui-qos", function () {
         return post("/v1/qos", { enabled: enabled });
@@ -464,11 +476,12 @@
         .catch(function (e) {
           alert(String(e.message || e));
         });
-    };
+    });
 
     function diag(path, body) {
       var out = document.getElementById("axos-diag");
-      out.textContent = "running…";
+      if (!out) return;
+      out.textContent = "running...";
       post(path, body)
         .then(function (r) {
           out.textContent = r.ok
@@ -480,25 +493,25 @@
         });
     }
 
-    document.getElementById("axos-ping").onclick = function () {
+      on("axos-ping", function () {
       diag("/v1/diag/ping", {
         host: document.getElementById("axos-host").value || "1.1.1.1",
         count: 3,
       });
-    };
-    document.getElementById("axos-dnslookup").onclick = function () {
+    });
+      on("axos-dnslookup", function () {
       diag("/v1/diag/dns", {
         name: document.getElementById("axos-host").value || "example.com",
       });
-    };
-    document.getElementById("axos-port").onclick = function () {
+    });
+      on("axos-port", function () {
       diag("/v1/diag/port", {
         host: document.getElementById("axos-host").value || "1.1.1.1",
         port: 443,
       });
-    };
+    });
 
-    document.getElementById("axos-dhcp-add").onclick = function () {
+      on("axos-dhcp-add", function () {
       var mac = document.getElementById("axos-dhcp-mac").value.trim();
       var ip = document.getElementById("axos-dhcp-ip").value.trim();
       var hostname = document.getElementById("axos-dhcp-name").value.trim();
@@ -518,22 +531,22 @@
         .catch(function (e) {
           alert(String(e.message || e));
         });
-    };
+    });
 
-    document.getElementById("axos-backup").onclick = function () {
+      on("axos-backup", function () {
       var st = document.getElementById("axos-backup-status");
-      st.textContent = "creating…";
+      if (st) st.textContent = "creating...";
       post("/v1/backup", { reason: "merlin-ui" })
         .then(function (b) {
-          st.textContent = "ok · " + (b.id || "");
+          if (st) st.textContent = "ok - " + (b.id || "");
           refresh();
         })
         .catch(function (e) {
-          st.textContent = String(e.message || e);
+          if (st) st.textContent = String(e.message || e);
         });
-    };
+    });
 
-    document.getElementById("axos-pol-add").onclick = function () {
+      on("axos-pol-add", function () {
       var source = document.getElementById("axos-pol-src").value.trim();
       var iface = document.getElementById("axos-pol-if").value.trim();
       var desc = document.getElementById("axos-pol-desc").value.trim();
@@ -559,20 +572,21 @@
         .catch(function (e) {
           alert(String(e.message || e));
         });
-    };
+    });
 
-    document.getElementById("axos-ep-ping").onclick = function () {
+      on("axos-ep-ping", function () {
       var hosts = document
         .getElementById("axos-ep-hosts")
         .value.trim()
         .split(/\s+/)
         .filter(Boolean);
       var out = document.getElementById("axos-ep-out");
+      if (!out) return;
       if (!hosts.length) {
         out.textContent = "no hosts";
         return;
       }
-      out.textContent = "pinging " + hosts.length + "…";
+      out.textContent = "pinging " + hosts.length + "...";
       var chain = Promise.resolve([]);
       hosts.forEach(function (h) {
         chain = chain.then(function (rows) {
@@ -606,9 +620,13 @@
           })
           .join("\n");
       });
-    };
+    });
 
-    refresh();
-    setInterval(refresh, 30000);
+      refresh();
+      setInterval(refresh, 30000);
+    } catch (e) {
+      setStatus("init error: " + (e && e.message ? e.message : e), false);
+      if (window.console && console.error) console.error("axosEmbedInit", e);
+    }
   };
 })(window);

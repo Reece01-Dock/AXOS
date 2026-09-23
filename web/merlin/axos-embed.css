@@ -1,4 +1,4 @@
-/* AXOS Merlin control panel — hot-deployed via JFFS bind-mount. */
+/* AXOS Merlin control panel - hot-deployed via JFFS bind-mount. */
 #axos-root { margin: 4px 2px 20px; }
 .axos-toolbar {
   display: flex;
