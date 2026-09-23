@@ -63,6 +63,10 @@
       .replace(/"/g, "&quot;");
   }
 
+  function asList(v) {
+    return Object.prototype.toString.call(v) === "[object Array]" ? v : [];
+  }
+
   function kvRows(pairs) {
     var html = "";
     for (var i = 0; i < pairs.length; i++) {
@@ -443,6 +447,9 @@
       get("/v1/policy").catch(function () {
         return [];
       }),
+      get("/v1/firewall").catch(function () {
+        return [];
+      }),
       get("/v1/vpn/client-groups").catch(function () {
         return { groups: [] };
       }),
@@ -467,12 +474,12 @@
         renderSys(info);
         renderRes(res);
         renderWifi(wifi);
-        renderClients(clients);
-        renderVpn(profiles);
-        renderSteer(clients, policy);
-        renderDhcp(dhcp);
-        renderPolicy(policy);
-        renderFw(firewall);
+        renderClients(asList(clients));
+        renderVpn(asList(profiles));
+        renderSteer(asList(clients), asList(policy));
+        renderDhcp(asList(dhcp));
+        renderPolicy(asList(policy));
+        renderFw(asList(firewall));
 
         document.getElementById("axos-dns-wan").value = (dns.wan_upstreams || []).join(" ");
         document.getElementById("axos-dns-dot").textContent = dns.dot_enabled
