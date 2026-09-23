@@ -221,6 +221,62 @@ lighttpd's `LIBUNWIND_CFLAGS` and `copy-prebuild` path bugs).
 - Packaging-only failure/retry reusing compiled components.
 - Package removal leaving no stale files in the assembled image.
 
+### Immediate unchanged rebuild: real, but nuanced, evidence
+
+Ran `APPLY_PATCHES=1 ./axos-build.sh build` again immediately after the
+8m40s success above, with zero source changes. Result: **7m55s** — only
+~9% faster, not the dramatic drop a naive read of "incremental builds"
+might expect. This is real data, reported honestly rather than
+reinterpreted to look better:
+
+- **Ccache itself is proven working excellently.** Computing the delta
+  between this run's before/after `ccache -s` (printed by
+  `entrypoint.sh`): direct hits +1339, preprocessed hits +100, misses
+  +21 — **1439/1460 = 98.6% hit rate for this run specifically**. Of
+  everything that needed a compiler invocation, almost none actually
+  re-compiled from scratch.
+- **So the ~8-minute wall time is not recompilation.** 121 compiler
+  invocations still appear in this run's log (`grep -c` on `-c ... -o
+  ...\.o`), but per the ccache delta above, the overwhelming majority of
+  those were cache hits (fast) rather than real compiles (slow) — ccache
+  is transparent to `make`'s own output, so the *invocation* still shows
+  up in the log even when the actual compile work was skipped.
+- **The likely real cost: mandatory serial (`-j1`) traversal of a huge
+  dependency graph, plus packaging/kernel-image steps that were never
+  audited for staleness-skipping.** This build runs strictly serial by
+  design (see "Everything else that was added" above — two confirmed
+  vendor parallel-build races, only one patched). Even with zero
+  recompilation, `make` still has to walk thousands of targets across
+  ~90 `router-sysdep` components, the kernel, userspace, and packaging
+  one at a time, checking each one's freshness. On top of that, this
+  project already documented (see "What was deliberately not changed")
+  that `fs.install` staging and the final image-assembly/kernel-build
+  steps were never verified to skip work when nothing changed — they
+  plausibly re-run unconditionally on every build, which section 6 of
+  the original task anticipated might sometimes be genuinely necessary
+  (stale-file correctness) rather than a bug.
+- **The output image also isn't byte-identical** between the two runs
+  (`dcef62e4...` vs `2381f1ba...`) and the accompanying manifest's
+  `built_at` timestamp differs (expected — this is a build-time value
+  written by `build.sh` itself, and the image likely embeds its own
+  build timestamp/version string internally too, e.g. in the kernel
+  version banner). This matches what the original task spec explicitly
+  anticipated: "account for timestamps or other nondeterministic
+  metadata instead of assuming the images must be byte-identical." Not
+  independently verified *which* embedded field(s) account for the
+  difference — that would need extracting and diffing the image
+  contents directly, not done here.
+
+**Honest conclusion**: the router-sysdep fix (`0014`) and ccache are
+both real and both working — proven by data, not by re-running the same
+claim until it sounds better. But they only address *compilation* reuse.
+A genuinely fast "nothing changed" rebuild also needs either bounded
+parallelism (blocked on the second, unpatched vendor race — see
+`0008`'s comment) or an audited fast-path through the serial
+dependency-graph walk and the packaging stage, neither of which this
+project has done. Recorded here as a real, open limitation, not
+something to claim fixed.
+
 ## What to run to gather that evidence
 
 On a real build machine, from a clean state:
