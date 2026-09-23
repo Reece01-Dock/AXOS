@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/reece01-dock/axos/internal/backend"
+	"github.com/reece01-dock/axos/internal/vpnbench"
 )
 
 // registerM3Routes wires Milestone 3 DNS / DHCP / QoS / VPN / firewall /
@@ -32,6 +33,7 @@ func (s *Server) registerM3Routes() {
 		return s.Backend.VPNProfiles(ctx)
 	}))
 	s.mux.HandleFunc("POST /v1/vpn/wireguard/import", s.handleImportWireGuard)
+	s.mux.HandleFunc("POST /v1/vpn/benchmark", s.handleVPNBenchmark)
 	s.mux.HandleFunc("POST /v1/vpn/{name}/up", s.handleVPNUp)
 	s.mux.HandleFunc("POST /v1/vpn/{name}/down", s.handleVPNDown)
 
@@ -174,6 +176,25 @@ func (s *Server) handleVPNDown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "down", "name": name})
+}
+
+type vpnBenchmarkRequest struct {
+	Hosts []string `json:"hosts"`
+	Count int      `json:"count"`
+}
+
+func (s *Server) handleVPNBenchmark(w http.ResponseWriter, r *http.Request) {
+	var req vpnBenchmarkRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	out, err := vpnbench.Run(r.Context(), s.Backend, req.Hosts, req.Count)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleFirewallApply(w http.ResponseWriter, r *http.Request) {

@@ -27,7 +27,7 @@ Status: ✅ implemented in axosd (mock-tested, hardware-unverified) ·
 | `system.services` | ✅ | running state of known router-managed services (read-only; *restart* individual native services is 🔜 Milestone 3 — not to be confused with `axosctl restart`, which restarts AXOS's own hot-deployable processes, see `docs/development.md`) |
 | `system.nvram_dump` | ✅ | full nvram key/value dump; contains secrets, same trust boundary as the rest of this API (`docs/security.md`); not audited on read, matching the "only mutating calls are audited" convention |
 | `system.update` | 🔮 | firmware update flow (human confirmation required) |
-| `system.packages` | 🔮 | optional module/package management |
+| `system.packages` | 🔮 | optional module/package management (`internal/pkgmod` registry skeleton) |
 
 ### Network
 
@@ -58,7 +58,8 @@ Status: ✅ implemented in axosd (mock-tested, hardware-unverified) ·
 | `vpn.list` | ✅ | configured profile slots (no private keys) |
 | `vpn.wireguard.import` | ✅ | **[danger]** import WG client into a Merlin slot |
 | `vpn.up` / `vpn.down` | ✅ | **[danger]** bring a named profile up/down |
-| `vpn.profile.create/delete`, `vpn.health`, `vpn.benchmark_endpoints`, `vpn.select_best_endpoint` | 🔜 | remaining VPN surface |
+| `vpn.benchmark_endpoints` | ✅ | rank hosts by from-router ping (`POST /v1/vpn/benchmark`); no profile mutation |
+| `vpn.profile.create/delete`, `vpn.health`, `vpn.select_best_endpoint` | 🔜 | remaining VPN surface |
 
 ### Policy routing (Milestone 3)
 

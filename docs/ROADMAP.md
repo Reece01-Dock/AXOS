@@ -527,9 +527,10 @@ Detailed status of the phases behind Milestone 2 — see
       `GET|POST /v1/policy` + `DELETE /v1/policy/{id}` (round-trip verified)
 - [x] Bypass rules (device stays on WAN) — policy route with
       `interface=wan` (same API)
-- [s] VPN endpoint latency benchmarking + automatic endpoint selection —
-      Merlin AXOS tab **VPN endpoint ping** ranks hosts via
-      `POST /v1/diag/ping`; no auto-apply to a profile yet
+- [x] VPN endpoint latency benchmarking + automatic endpoint selection —
+      `POST /v1/vpn/benchmark` + MCP `vpn.benchmark_endpoints` rank hosts by
+      ping (verified in sandbox + Merlin UI); **auto-apply to a profile** still
+      deferred (`vpn.select_best_endpoint`)
 - [x] DNS configuration — `GET|POST /v1/dns` (WAN upstreams + DoT flags
       from nvram; live read verified)
 - [x] DHCP reservations — `GET|POST /v1/dhcp/reservations` + DELETE by MAC
@@ -572,7 +573,9 @@ KEEP OR REVERT → CONTINUE. No unbenchmarked "tuning".
       Administration keeps the full control panel. Session-gated + LAN API
       token (`X-Axos-UI-Token`). Iterate with `deploy-router.sh` / 
       `axos-merlin-ui.sh`, no firmware rebuild.
-- [ ] Package/module system for optional functionality
+- [s] Package/module system for optional functionality —
+      `internal/pkgmod` in-memory registry contract + unit test; no USB
+      install/enable path or Core API yet
 - [ ] Historical metrics on USB storage (never internal flash)
 - [ ] Backup encryption at rest, once a key-management approach is decided
       (`docs/security.md` "Secrets at rest")

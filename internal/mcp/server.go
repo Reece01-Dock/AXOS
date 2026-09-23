@@ -138,6 +138,8 @@ func (s *Server) registerTools() {
 		schema(`"enabled":{"type":"boolean"}`), true, handleQoSSet)
 
 	s.register("vpn.list", "List configured VPN client profile slots (no private keys).", schema(""), false, handleVPNList)
+	s.register("vpn.benchmark_endpoints", "Rank VPN/WAN endpoint hosts by from-router ping latency (no profile changes).",
+		schema(`"hosts":{"type":"array","items":{"type":"string"}},"count":{"type":"integer","default":3}`), false, handleVPNBenchmark)
 	s.register("vpn.wireguard.import", "Import a WireGuard client profile into a Merlin slot.",
 		schema(`"unit":{"type":"integer"},"description":{"type":"string"},"private_key":{"type":"string"},"peer_public_key":{"type":"string"},"preshared_key":{"type":"string"},"endpoint":{"type":"string"},"endpoint_port":{"type":"integer"},"address":{"type":"string"},"allowed_ips":{"type":"array","items":{"type":"string"}},"dns":{"type":"string"},"mtu":{"type":"integer"},"keepalive":{"type":"integer"},"nat":{"type":"boolean"},"kill_switch":{"type":"boolean"}`),
 		true, handleVPNWireGuardImport)

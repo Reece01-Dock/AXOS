@@ -8,6 +8,7 @@ import (
 
 	"github.com/reece01-dock/axos/internal/backend"
 	"github.com/reece01-dock/axos/internal/rollback"
+	"github.com/reece01-dock/axos/internal/vpnbench"
 )
 
 func decodeArgs(raw json.RawMessage, v interface{}) error {
@@ -331,6 +332,19 @@ func handleQoSSet(ctx context.Context, s *Server, raw json.RawMessage) (interfac
 
 func handleVPNList(ctx context.Context, s *Server, _ json.RawMessage) (interface{}, error) {
 	return s.Backend.VPNProfiles(ctx)
+}
+
+type vpnBenchmarkArgs struct {
+	Hosts []string `json:"hosts"`
+	Count int      `json:"count"`
+}
+
+func handleVPNBenchmark(ctx context.Context, s *Server, raw json.RawMessage) (interface{}, error) {
+	var a vpnBenchmarkArgs
+	if err := decodeArgs(raw, &a); err != nil {
+		return nil, err
+	}
+	return vpnbench.Run(ctx, s.Backend, a.Hosts, a.Count)
 }
 
 func handleVPNWireGuardImport(ctx context.Context, s *Server, raw json.RawMessage) (interface{}, error) {

@@ -15,11 +15,14 @@ func (b *Backend) Ping(_ context.Context, host string, count int) (backend.DiagR
 	if count <= 0 {
 		count = 4
 	}
+	// Deterministic fake RTT from host length so /v1/vpn/benchmark sorts stably in tests.
+	avg := float64(len(host)) + 0.5
 	cmd := fmt.Sprintf("ping -c %d %s", count, host)
+	out := fmt.Sprintf("[mock] PING %s: %d packets transmitted, %d received\nrtt min/avg/max/mdev = 1.0/%.1f/9.0/0.1 ms", host, count, count, avg)
 	return backend.DiagResult{
 		Command:  cmd,
 		OK:       true,
-		Output:   fmt.Sprintf("[mock] PING %s: %d packets transmitted, %d received", host, count, count),
+		Output:   out,
 		Duration: 12 * time.Millisecond,
 	}, nil
 }

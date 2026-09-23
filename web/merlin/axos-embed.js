@@ -418,13 +418,6 @@
     };
   }
 
-  function parseAvgMs(output) {
-    // busybox/iputils: "round-trip min/avg/max = 1.2/3.4/5.6 ms" or "rtt min/avg/max/mdev = ..."
-    var m = String(output || "").match(/(?:round-trip|rtt)[^=]*=\s*([\d.]+)\/([\d.]+)\/([\d.]+)/i);
-    if (m) return parseFloat(m[2]);
-    return null;
-  }
-
   global.axosEmbedInit = function () {
     try {
       if (!token()) setStatus("missing UI token - run axos-merlin-ui.sh", false);
@@ -586,40 +579,25 @@
         out.textContent = "no hosts";
         return;
       }
-      out.textContent = "pinging " + hosts.length + "...";
-      var chain = Promise.resolve([]);
-      hosts.forEach(function (h) {
-        chain = chain.then(function (rows) {
-          return post("/v1/diag/ping", { host: h, count: 3 })
-            .then(function (r) {
-              var avg = parseAvgMs(r.output);
-              rows.push({
-                host: h,
-                ok: !!r.ok,
-                avg_ms: avg,
-                line: avg != null ? avg.toFixed(1) + " ms avg" : r.ok ? "ok (no rtt)" : "fail",
-              });
-              return rows;
-            })
-            .catch(function (e) {
-              rows.push({ host: h, ok: false, avg_ms: null, line: String(e.message || e) });
-              return rows;
-            });
+      out.textContent = "benchmarking " + hosts.length + "...";
+      post("/v1/vpn/benchmark", { hosts: hosts, count: 3 })
+        .then(function (r) {
+          var rows = (r && r.results) || [];
+          var lines = rows.map(function (s, i) {
+            var line =
+              s.avg_ms != null
+                ? Number(s.avg_ms).toFixed(1) + " ms avg"
+                : s.ok
+                  ? "ok (no rtt)"
+                  : "fail";
+            return i + 1 + ". " + s.host + "  " + line;
+          });
+          if (r && r.best) lines.push("", "best: " + r.best);
+          out.textContent = lines.join("\n") || "no results";
+        })
+        .catch(function (e) {
+          out.textContent = String(e.message || e);
         });
-      });
-      chain.then(function (rows) {
-        rows.sort(function (a, b) {
-          if (a.avg_ms == null && b.avg_ms == null) return 0;
-          if (a.avg_ms == null) return 1;
-          if (b.avg_ms == null) return -1;
-          return a.avg_ms - b.avg_ms;
-        });
-        out.textContent = rows
-          .map(function (r, i) {
-            return i + 1 + ". " + r.host + "  " + r.line;
-          })
-          .join("\n");
-      });
     });
 
       refresh();

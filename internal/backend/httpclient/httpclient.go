@@ -302,6 +302,15 @@ func (c *Client) VPNDown(ctx context.Context, name string) error {
 	return c.do(ctx, http.MethodPost, "/v1/vpn/"+url.PathEscape(name)+"/down", nil, nil)
 }
 
+// VPNBenchmark ranks hosts via the Core API (not part of RouterBackend).
+func (c *Client) VPNBenchmark(ctx context.Context, hosts []string, count int) (map[string]interface{}, error) {
+	var v map[string]interface{}
+	err := c.do(ctx, http.MethodPost, "/v1/vpn/benchmark", map[string]interface{}{
+		"hosts": hosts, "count": count,
+	}, &v)
+	return v, err
+}
+
 func (c *Client) FirewallApply(ctx context.Context, rule backend.FirewallRule) error {
 	return c.do(ctx, http.MethodPost, "/v1/firewall/apply", rule, nil)
 }
