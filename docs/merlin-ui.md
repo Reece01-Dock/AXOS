@@ -21,6 +21,16 @@ you iterate with `deploy-router.sh`, not a firmware flash.
 
 Source UI files: `web/merlin/` (staged into each release as `merlin-ui/`).
 
+## Where to find it in the Merlin UI
+
+- Left menu: **AXOS → Control**
+- Or **Administration** (gear) → tab **AXOS** (next to System)
+- Direct URL (while logged in): `http://www.asusrouter.com/userRpm/Axos_Content.asp`
+
+Merlin caches the menu in the browser Session. If you do not see AXOS after
+install/upgrade: **log out and log back in** (or use a private window), then
+hard-refresh.
+
 ## Day-to-day workflow
 
 ```sh
