@@ -84,13 +84,29 @@ index fe6950ea62..ac4f2e04d5 100644
  
  onig-6.9.9-install:
 diff --git a/release/src/router/lighttpd-1.4.39/preconfigure-script-hnd b/release/src/router/lighttpd-1.4.39/preconfigure-script-hnd
-index edd867a349..e9f014897a 100755
+index edd867a349..f70194905c 100755
 --- a/release/src/router/lighttpd-1.4.39/preconfigure-script-hnd
 +++ b/release/src/router/lighttpd-1.4.39/preconfigure-script-hnd
-@@ -64,4 +64,5 @@ $CONFIGURE --prefix=/usr \
+@@ -64,4 +64,21 @@ $CONFIGURE --prefix=/usr \
  --without-zlib \
  --without-bzip2 \
  --enable-shared \
 ---disable-static
 +--disable-static \
 +--disable-maintainer-mode
++
++# src/Makefile.am references $(LIBUNWIND_CFLAGS)/$(LIBUNWIND_LIBS)
++# unconditionally, but configure.ac only calls PKG_CHECK_MODULES(LIBUNWIND,
++# libunwind) -- which is what actually AC_SUBSTs those variables -- inside
++# an `if test "$WITH_LIBUNWIND" != "no"` block, and --with-libunwind is
++# never passed above (defaults to "no"). So automake emits
++# @LIBUNWIND_CFLAGS@/@LIBUNWIND_LIBS@ placeholders in the generated
++# Makefile expecting configure to fill them in, but configure never
++# registered them as substitutions in the first place, so config.status
++# has no way to and the literal placeholder text survives into the real
++# Makefile -- confirmed via a real build: gcc tried to open a file
++# literally named "LIBUNWIND_CFLAGS@". A genuine upstream configure.ac
++# bug, not something any of our patches introduced; strip the leftover
++# placeholders directly rather than touch the fragile
++# autoreconf/automake-version-dependent regeneration path.
++sed -i 's/@LIBUNWIND_CFLAGS@//g; s/@LIBUNWIND_LIBS@//g' src/Makefile

@@ -155,27 +155,6 @@ retried build looked like it started over. See `docs/incremental-builds.md`
 for the full root-cause trace and how to use the resulting `axos-build.sh`
 controller.
 
-## `0016`: lighttpd's own genuine upstream configure.ac bug
-
-`0016-gt-ax6000-lighttpd-libunwind-placeholder.patch` — `src/Makefile.am`
-references `$(LIBUNWIND_CFLAGS)`/`$(LIBUNWIND_LIBS)` unconditionally, but
-`configure.ac` only calls `PKG_CHECK_MODULES(LIBUNWIND, libunwind)` —
-what actually registers those as `AC_SUBST` substitutions — inside an
-`if test "$WITH_LIBUNWIND" != "no"` block, and `--with-libunwind` is
-never passed (defaults to `no`) by `preconfigure-script-hnd`. Automake
-still emits `@LIBUNWIND_CFLAGS@`/`@LIBUNWIND_LIBS@` placeholders into the
-generated Makefile expecting configure to fill them in, but since
-configure never registered them, the literal placeholder text survives
-into the real Makefile — confirmed via a real build: gcc tried to open a
-file literally named `LIBUNWIND_CFLAGS@`. This is a genuine, always-
-reproducible upstream `configure.ac` bug (nothing to do with any
-`autoreconf`/mtime fragility this project already worked around for
-`0013`/`0015`) — fixed by stripping the leftover placeholders from the
-generated `src/Makefile` with `sed` right after `preconfigure-script-hnd`
-runs configure, rather than touching `configure.ac` itself and re-opening
-the same regeneration-fragility questions `0013`/`0015` already had to
-work around.
-
 ## `0017`: same prebuild/ gap pattern as UUPLUGIN/TPVPN/etc, but a path bug
 
 `0017-gt-ax6000-lighttpd-prebuild-path.patch` — lighttpd's `copy-prebuild:`
@@ -224,6 +203,30 @@ fixed all of them together rather than rediscovering each one serially
 across further build attempts. Verified: applies cleanly through the
 full patch sequence against the real pinned checkout, and a reverse-check
 confirms it as idempotent.
+
+**Folded-in follow-up (originally drafted as a separate `0016`)**:
+`src/Makefile.am` (lighttpd) references `$(LIBUNWIND_CFLAGS)`/
+`$(LIBUNWIND_LIBS)` unconditionally, but `configure.ac` only calls
+`PKG_CHECK_MODULES(LIBUNWIND, libunwind)` — what actually registers
+those as `AC_SUBST` substitutions — inside an
+`if test "$WITH_LIBUNWIND" != "no"` block, and `--with-libunwind` is
+never passed (defaults to `no`) by `preconfigure-script-hnd`. Automake
+still emits `@LIBUNWIND_CFLAGS@`/`@LIBUNWIND_LIBS@` placeholders
+expecting configure to fill them in; since configure never registered
+them, the literal placeholder text survives into the real Makefile —
+confirmed via a real build: gcc tried to open a file literally named
+`LIBUNWIND_CFLAGS@`. A genuine, always-reproducible upstream
+`configure.ac` bug, unrelated to the `autoreconf`/mtime fragility this
+patch and `0013` otherwise work around — fixed by `sed`-stripping the
+leftover placeholders from the generated `src/Makefile` right after
+`preconfigure-script-hnd` runs configure. Originally shipped as its own
+`0016` patch, then merged directly into this one: `0016`'s hunk and this
+patch's own `preconfigure-script-hnd` hunk touched immediately-adjacent
+lines with no context gap between them, which made `git apply --reverse`
+unable to cleanly identify either hunk's boundary once both were
+applied — confirmed by reproducing the exact failure locally. Two
+patches touching directly-adjacent regions of the same file is now
+avoided on principle, not just here.
 
 Keep each patch focused on one logical change and documented with a one-line
 summary at the top of the patch file (a comment above the `diff --git` line is
