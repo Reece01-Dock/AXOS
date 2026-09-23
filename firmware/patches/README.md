@@ -155,6 +155,27 @@ retried build looked like it started over. See `docs/incremental-builds.md`
 for the full root-cause trace and how to use the resulting `axos-build.sh`
 controller.
 
+## `0016`: lighttpd's own genuine upstream configure.ac bug
+
+`0016-gt-ax6000-lighttpd-libunwind-placeholder.patch` — `src/Makefile.am`
+references `$(LIBUNWIND_CFLAGS)`/`$(LIBUNWIND_LIBS)` unconditionally, but
+`configure.ac` only calls `PKG_CHECK_MODULES(LIBUNWIND, libunwind)` —
+what actually registers those as `AC_SUBST` substitutions — inside an
+`if test "$WITH_LIBUNWIND" != "no"` block, and `--with-libunwind` is
+never passed (defaults to `no`) by `preconfigure-script-hnd`. Automake
+still emits `@LIBUNWIND_CFLAGS@`/`@LIBUNWIND_LIBS@` placeholders into the
+generated Makefile expecting configure to fill them in, but since
+configure never registered them, the literal placeholder text survives
+into the real Makefile — confirmed via a real build: gcc tried to open a
+file literally named `LIBUNWIND_CFLAGS@`. This is a genuine, always-
+reproducible upstream `configure.ac` bug (nothing to do with any
+`autoreconf`/mtime fragility this project already worked around for
+`0013`/`0015`) — fixed by stripping the leftover placeholders from the
+generated `src/Makefile` with `sed` right after `preconfigure-script-hnd`
+runs configure, rather than touching `configure.ac` itself and re-opening
+the same regeneration-fragility questions `0013`/`0015` already had to
+work around.
+
 ## Later patches (Milestone 2+)
 
 - Install hook for `axosd` (a `services-start` addition, or an `/etc/init.d`
