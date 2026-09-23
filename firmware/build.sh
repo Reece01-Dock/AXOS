@@ -46,7 +46,22 @@ if [ "$APPLY_PATCHES" = "1" ]; then
     echo "    (no patches found in firmware/patches/)"
   fi
   for p in "${patches[@]}"; do
-    echo "    applying $(basename "$p")"
+    name="$(basename "$p")"
+    # Idempotency check: this script never reverts patches after a build (the
+    # submodule tree is deliberately left as-is so router-sysdep/ and every
+    # other build-output directory survive for the next incremental build —
+    # see docs/incremental-builds.md). That means a second `build`/`resume`
+    # run applies patches onto a tree that may already have them, which a
+    # plain `git apply` rejects as a conflict even though nothing is
+    # actually wrong (confirmed via a real run: "patch does not apply" on
+    # 0001 after a prior successful build, purely because it was already
+    # there). `apply --reverse --check` succeeding means this patch's exact
+    # changes are already present — skip it rather than erroring.
+    if git -C "$MERLIN_SRC" apply --reverse --check "$p" 2>/dev/null; then
+      echo "    skipping $name (already applied)"
+      continue
+    fi
+    echo "    applying $name"
     git -C "$MERLIN_SRC" apply --check "$p"
     git -C "$MERLIN_SRC" apply "$p"
   done
