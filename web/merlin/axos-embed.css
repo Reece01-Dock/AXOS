@@ -1,51 +1,23 @@
-/* AXOS panel inside Merlin FormTitle chrome — hot-deployed via JFFS bind-mount. */
-#axos-root {
-  margin: 8px 4px 16px;
-  color: #e0e6e8;
-  font-family: "Lucida Console", "Courier New", monospace;
-  font-size: 12px;
-}
+/* AXOS Merlin control panel — hot-deployed via JFFS bind-mount. */
+#axos-root { margin: 4px 2px 20px; }
 .axos-toolbar {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
+  margin: 0 0 14px 2px;
 }
-.axos-status { color: #ffcc66; }
+.axos-status { color: #ffcc66; font-family: Arial, Helvetica, sans-serif; font-size: 12px; }
 .axos-status.ok { color: #7dffb3; }
-.axos-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.axos-grid section {
-  background: rgba(0, 0, 0, 0.22);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 10px 12px;
-  min-height: 120px;
-}
-.axos-grid h3 {
-  margin: 0 0 8px;
-  font-size: 13px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #9adbc0;
-  font-family: Arial, Helvetica, sans-serif;
-}
-.axos-grid pre {
+.axos-table { margin-bottom: 14px !important; }
+.axos-pre {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 220px;
+  max-height: 240px;
   overflow: auto;
+  font-family: "Lucida Console", "Courier New", monospace;
+  font-size: 11px;
   color: #dce6ea;
 }
-.axos-diag {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-@media (max-width: 900px) {
-  .axos-grid { grid-template-columns: 1fr; }
-}
+.hint { color: #9ab; font-size: 11px; margin-left: 8px; }
+.axos-actions input.button_gen { margin-right: 4px; }

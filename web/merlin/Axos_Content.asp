@@ -21,10 +21,7 @@
 <script type="text/javascript" src="/userRpm/axos-embed.js"></script>
 <script>
 function initial(){
-	try {
-		show_menu();
-	} catch (e) {
-		// Stale Session menuList or unmatched tab — still show AXOS content.
+	try { show_menu(); } catch (e) {
 		if (window.console && console.warn) console.warn("show_menu:", e);
 	}
 	axosEmbedInit();
@@ -39,12 +36,9 @@ function initial(){
 <form method="post" name="form" action="/start_apply.htm" target="hidden_frame">
 <input type="hidden" name="current_page" value="Main_GameServer_Content.asp">
 <input type="hidden" name="next_page" value="">
-<input type="hidden" name="group_id" value="">
-<input type="hidden" name="modified" value="0">
 <input type="hidden" name="action_mode" value="">
 <input type="hidden" name="action_script" value="">
 <input type="hidden" name="action_wait" value="">
-<input type="hidden" name="first_time" value="">
 <input type="hidden" name="preferred_lang" id="preferred_lang" value="<% nvram_get("preferred_lang"); %>">
 <input type="hidden" name="firmver" value="<% nvram_get("firmver"); %>">
 
@@ -67,29 +61,130 @@ function initial(){
 						<div class="formfonttitle">AXOS</div>
 						<div style="margin:10px 0 10px 5px;" class="splitLine"></div>
 						<div class="formfontdesc">
-							Live control plane shared with MCP and CLI. UI files hot-deploy from JFFS
-							(<code>/jffs/axos/merlin-ui</code>) — no firmware rebuild to iterate.
+							Same control plane as MCP / CLI. Hot-deployed from JFFS — edit
+							<code>web/merlin/</code>, run <code>deploy-router.sh</code>, no firmware flash.
 						</div>
+
 						<div id="axos-root">
 							<div class="axos-toolbar">
-								<button type="button" class="button_gen" id="axos-refresh">Refresh</button>
+								<input type="button" class="button_gen" id="axos-refresh" value="Refresh">
 								<span id="axos-status" class="axos-status">connecting…</span>
 							</div>
-							<div class="axos-grid">
-								<section><h3>System</h3><pre id="axos-sys">…</pre></section>
-								<section><h3>Resources</h3><pre id="axos-res">…</pre></section>
-								<section><h3>Network</h3><pre id="axos-net">…</pre></section>
-								<section><h3>Wi-Fi</h3><pre id="axos-wifi">…</pre></section>
-								<section><h3>VPN / DNS / QoS</h3><pre id="axos-vpn">…</pre></section>
-								<section>
-									<h3>Diagnostics</h3>
-									<div class="axos-diag">
-										<input type="text" id="axos-host" value="1.1.1.1" class="input_20_table" />
-										<button type="button" class="button_gen" id="axos-ping">Ping</button>
-									</div>
-									<pre id="axos-diag">—</pre>
-								</section>
-							</div>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="2">System</td></tr></thead>
+								<tbody id="axos-sys-body">
+									<tr><th>Status</th><td>Loading…</td></tr>
+								</tbody>
+							</table>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="2">Resources</td></tr></thead>
+								<tbody id="axos-res-body"></tbody>
+							</table>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="2">DNS</td></tr></thead>
+								<tbody>
+									<tr>
+										<th>WAN upstreams</th>
+										<td>
+											<input type="text" id="axos-dns-wan" class="input_32_table" style="width:320px" />
+											<span class="hint">space-separated</span>
+										</td>
+									</tr>
+									<tr>
+										<th>DoT</th>
+										<td id="axos-dns-dot">—</td>
+									</tr>
+									<tr>
+										<th>Apply</th>
+										<td><input type="button" class="button_gen" id="axos-dns-apply" value="Apply DNS"></td>
+									</tr>
+								</tbody>
+							</table>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="2">QoS</td></tr></thead>
+								<tbody>
+									<tr>
+										<th>Enabled</th>
+										<td>
+											<input type="checkbox" id="axos-qos-enable">
+											<input type="button" class="button_gen" id="axos-qos-apply" value="Apply QoS" style="margin-left:12px">
+										</td>
+									</tr>
+									<tr><th>Mode</th><td id="axos-qos-mode">—</td></tr>
+								</tbody>
+							</table>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="2">Diagnostics</td></tr></thead>
+								<tbody>
+									<tr>
+										<th>Host</th>
+										<td>
+											<input type="text" id="axos-host" value="1.1.1.1" class="input_32_table" />
+											<input type="button" class="button_gen" id="axos-ping" value="Ping">
+											<input type="button" class="button_gen" id="axos-dnslookup" value="DNS">
+											<input type="button" class="button_gen" id="axos-port" value="Port 443">
+										</td>
+									</tr>
+									<tr>
+										<th>Result</th>
+										<td><pre id="axos-diag" class="axos-pre">—</pre></td>
+									</tr>
+								</tbody>
+							</table>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="4">Wi-Fi</td></tr>
+								<tr><th>Radio</th><th>SSID</th><th>Channel</th><th>Clients</th></tr></thead>
+								<tbody id="axos-wifi-body"></tbody>
+							</table>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="4">Clients</td></tr>
+								<tr><th>Hostname</th><th>IP</th><th>MAC</th><th>Iface</th></tr></thead>
+								<tbody id="axos-clients-body"></tbody>
+							</table>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="5">VPN profiles</td></tr>
+								<tr><th>Name</th><th>Type</th><th>Endpoint</th><th>Enabled</th><th></th></tr></thead>
+								<tbody id="axos-vpn-body"></tbody>
+							</table>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="4">DHCP reservations</td></tr>
+								<tr><th>MAC</th><th>IP</th><th>Hostname</th><th></th></tr></thead>
+								<tbody id="axos-dhcp-body"></tbody>
+								<tbody>
+									<tr>
+										<th>Add</th>
+										<td colspan="3">
+											<input type="text" id="axos-dhcp-mac" placeholder="AA:BB:CC:DD:EE:FF" class="input_20_table" />
+											<input type="text" id="axos-dhcp-ip" placeholder="192.168.50.50" class="input_15_table" />
+											<input type="text" id="axos-dhcp-name" placeholder="hostname" class="input_15_table" />
+											<input type="button" class="button_gen" id="axos-dhcp-add" value="Add">
+										</td>
+									</tr>
+								</tbody>
+							</table>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="2">Config backup</td></tr></thead>
+								<tbody>
+									<tr>
+										<th>Snapshot</th>
+										<td>
+											<input type="button" class="button_gen" id="axos-backup" value="Create backup">
+											<span id="axos-backup-status" class="hint"></span>
+										</td>
+									</tr>
+									<tr><th>Known backups</th><td><pre id="axos-backups" class="axos-pre">—</pre></td></tr>
+								</tbody>
+							</table>
 						</div>
 					</td>
 				</tr>
