@@ -65,18 +65,21 @@ still true, now resting on a different mechanism:
   running a process on the router (equivalent to the old stdio-only
   story — SSH access is still the perimeter) or an SSH-forwarded tunnel to
   that port from elsewhere.
+- **Merlin-embedded UI exception:** `axos-bootstrap` binds
+  `0.0.0.0:9090` **with** `-ui-token-file` so the stock Merlin httpd page
+  (`docs/merlin-ui.md`) can call the API from the browser. Non-loopback
+  callers must send `X-Axos-UI-Token`; loopback (MCP / SSH tunnel /
+  on-router tools) stays token-free. The token is only exposed inside
+  Merlin session-gated pages (`/userRpm/token.js`). Do **not** forward
+  WAN port 9090. This is the documented LAN-UI path — not a license to
+  run an open unauthenticated API on the network.
 - **`axos-mcp`/`axosctl` run on a dev PC, talking to a router over the
-  network** (`docs/development.md` "Live Development Mode") — this is a
-  real, intended use case, and it must **not** be achieved by widening
-  `-api-addr` to `0.0.0.0` or a LAN-facing address. The correct way: SSH
-  port-forward the loopback-bound port out —
-  `ssh -L 9090:127.0.0.1:9090 router` — and point `axos-mcp`/`axosctl` at
-  `http://127.0.0.1:9090` locally. This keeps SSH as the one authentication
-  perimeter and adds zero new exposure. Widening the bind address instead
-  is a **standing decision to run an unauthenticated full-root API on the
-  network** — never do this as a convenience shortcut; if a real need for
-  non-loopback binding ever arises, treat it as the "future network
-  transport" case below, not as flipping a flag.
+  network** (`docs/development.md` "Live Development Mode") — prefer SSH
+  port-forward of loopback
+  (`ssh -L 9090:127.0.0.1:9090 router`) rather than relying on the LAN
+  token path. Widening the bind **without** `-ui-token-file` is still a
+  standing decision to run an unauthenticated full-root API on the
+  network — never do this as a convenience shortcut.
 - **Key-based SSH auth only.** Disable password auth on the router
   (`nvram set sshd_pass=0` equivalent in Merlin's SSH settings) before AXOS
   is used for anything beyond lab testing.
@@ -236,9 +239,9 @@ continuous") starts from a checklist instead of a blank page:
       permissions, enforced on every write (tested)
 - [x] Audit log: owner-only permissions, enforced on open (tested)
 - [x] Restore verifies backup integrity via checksum before applying (tested)
-- [x] Core API (`axosd serve`) defaults to binding `127.0.0.1` only,
-      enforced as the flag default (`docs/development.md`; use an SSH
-      tunnel for dev-PC-to-router access, never widen the bind)
+- [x] Core API (`axosd serve`) defaults to binding `127.0.0.1` only;
+      Merlin UI path uses LAN bind **with** `-ui-token-file` (see
+      `docs/merlin-ui.md`)
 - [x] SSH password auth disabled on the router (verify during Milestone 1/2
       hardware bring-up; router default may have it enabled)
 - [ ] Backup encryption at rest (blocked on a key-management decision, above)
