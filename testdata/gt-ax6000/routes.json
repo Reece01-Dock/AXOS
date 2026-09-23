@@ -1,0 +1,53 @@
+[
+  {
+    "table": "main",
+    "destination": "default",
+    "gateway": "172.16.13.111",
+    "interface": "ppp0",
+    "metric": 0
+  },
+  {
+    "table": "main",
+    "destination": "81.139.56.100",
+    "gateway": "172.16.13.111",
+    "interface": "ppp0",
+    "metric": 1
+  },
+  {
+    "table": "main",
+    "destination": "81.139.57.100",
+    "gateway": "172.16.13.111",
+    "interface": "ppp0",
+    "metric": 1
+  },
+  {
+    "table": "main",
+    "destination": "127.0.0.0/8",
+    "interface": "lo",
+    "metric": 0
+  },
+  {
+    "table": "main",
+    "destination": "169.254.0.0/16",
+    "interface": "eth0",
+    "metric": 0
+  },
+  {
+    "table": "main",
+    "destination": "172.16.13.111",
+    "interface": "ppp0",
+    "metric": 0
+  },
+  {
+    "table": "main",
+    "destination": "192.168.50.0/24",
+    "interface": "br0",
+    "metric": 0
+  },
+  {
+    "table": "main",
+    "destination": "239.0.0.0/8",
+    "interface": "br0",
+    "metric": 0
+  }
+]

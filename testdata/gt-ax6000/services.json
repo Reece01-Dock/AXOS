@@ -1,0 +1,20 @@
+[
+  {
+    "name": "dnsmasq",
+    "running": true,
+    "pid": 3199
+  },
+  {
+    "name": "httpd",
+    "running": true,
+    "pid": 2644
+  },
+  {
+    "name": "openvpn",
+    "running": false
+  },
+  {
+    "name": "wireguard",
+    "running": false
+  }
+]

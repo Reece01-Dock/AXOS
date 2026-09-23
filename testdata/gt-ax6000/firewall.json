@@ -1,0 +1,467 @@
+[
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-p udp -m udp --dport 53 -j URLFI"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-p icmp -m icmp --icmp-type 8 -j INPUT_PING"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-m state --state RELATED,ESTABLISHED -j ACCEPT"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-m state --state INVALID -j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "! -i br0 -j PTCSRVWAN"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-i br0 -j PTCSRVLAN"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "! -i lo -p tcp -m tcp --dport 5152 -j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-i br0 -m state --state NEW -j ACCEPT"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-i lo -m state --state NEW -j ACCEPT"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-p udp -m udp --sport 67 --dport 68 -j ACCEPT"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-p tcp -m tcp --dport 22 -j ACCEPT"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-p icmp -j INPUT_ICMP"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-p gre -j ACCEPT"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-j WGSI"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-j WGCI"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-j OVPNSI"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-j OVPNCI"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-j SDN_FI"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT",
+    "rule": "-j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-j NWFF"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-j URLFF"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-j IPSEC_DROP_SUBNET_ICMP"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-j IPSECSSDN"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-j IPSEC_STRONGSWAN"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-m state --state RELATED,ESTABLISHED -j ACCEPT"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-j WGSF"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-j OVPNSF"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-i br0 -o br0 -j ACCEPT"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-m state --state INVALID -j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-m conntrack --ctstate DNAT -j ACCEPT"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-j WGCF"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-j OVPNCF"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-j VPNCF"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-j SDN_FF"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-i br0 -j ACCEPT"
+  },
+  {
+    "table": "filter",
+    "chain": "FORWARD",
+    "rule": "-j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT",
+    "rule": "-p udp -m udp --dport 53 -m u32 --u32 \"0x0\u003e\u003e0x16\u00260x3c@0x8\u003e\u003e0xf\u00260x1=0x0\" -j OUTPUT_DNS"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT",
+    "rule": "-p tcp -m tcp --dport 53 -m u32 --u32 \"0x0\u003e\u003e0x16\u00260x3c@0xc\u003e\u003e0x1a\u00260x3c@0x8\u003e\u003e0xf\u00260x1=0x0\" -j OUTPUT_DNS"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT",
+    "rule": "-j OUTPUT_IP"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT_ICMP",
+    "rule": "-p icmp -m icmp --icmp-type 8 -j RETURN"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT_ICMP",
+    "rule": "-p icmp -m icmp --icmp-type 13 -j RETURN"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT_ICMP",
+    "rule": "-p icmp -j ACCEPT"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT_PING",
+    "rule": "-i ppp0 -p icmp -j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "INPUT_PING",
+    "rule": "-i eth0 -p icmp -j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|10706f697579747975696f706b6a666e6603636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|0d72666a656a6e666a6e65666a6503636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|1131306166646d617361787373736171726b03636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|0f376d667364666173646d6b676d726b03636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|0d386d617361787373736171726b03636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|0f3966646d617361787373736171726b03636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|1265666274686d6f6975796b6d6b6a6b6a677403636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|086861636b7563647403636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|076c696e77756469056633333232036e657400|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|0f6c6b6a68676664736174727975696f03636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|0b6d6e627663787a7a7a313203636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|077131313133333303746f7000|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|057371353230056633333232036e657400|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|077563746b6f6e6503636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|0e7a786376626d6e6e666a6a66777103636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_DNS",
+    "rule": "-m string --hex-string \"|0a65756d6d6167766e627003636f6d00|\" --algo bm --to 65535 --icase -j logdrop_dns"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_IP",
+    "rule": "-d 193.201.224.0/24 -j logdrop_ip"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_IP",
+    "rule": "-d 51.15.120.245/32 -j logdrop_ip"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_IP",
+    "rule": "-d 45.33.73.134/32 -j logdrop_ip"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_IP",
+    "rule": "-d 190.115.18.28/32 -j logdrop_ip"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_IP",
+    "rule": "-d 51.159.52.250/32 -j logdrop_ip"
+  },
+  {
+    "table": "filter",
+    "chain": "OUTPUT_IP",
+    "rule": "-d 190.115.18.86/32 -j logdrop_ip"
+  },
+  {
+    "table": "filter",
+    "chain": "SDN_FF",
+    "rule": "-j SDN_IA"
+  },
+  {
+    "table": "filter",
+    "chain": "SDN_IA",
+    "rule": "-i br+ -o br+ -j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "SECURITY",
+    "rule": "-p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m limit --limit 1/sec -j RETURN"
+  },
+  {
+    "table": "filter",
+    "chain": "SECURITY",
+    "rule": "-p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "SECURITY",
+    "rule": "-p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK RST -m limit --limit 1/sec -j RETURN"
+  },
+  {
+    "table": "filter",
+    "chain": "SECURITY",
+    "rule": "-p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK RST -j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "SECURITY",
+    "rule": "-p icmp -m icmp --icmp-type 8 -m limit --limit 1/sec -j RETURN"
+  },
+  {
+    "table": "filter",
+    "chain": "SECURITY",
+    "rule": "-p icmp -m icmp --icmp-type 8 -j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "SECURITY",
+    "rule": "-j RETURN"
+  },
+  {
+    "table": "filter",
+    "chain": "logaccept",
+    "rule": "-m state --state NEW -j LOG --log-prefix \"ACCEPT \" --log-tcp-sequence --log-tcp-options --log-ip-options"
+  },
+  {
+    "table": "filter",
+    "chain": "logaccept",
+    "rule": "-j ACCEPT"
+  },
+  {
+    "table": "filter",
+    "chain": "logdrop",
+    "rule": "-m state --state NEW -j LOG --log-prefix \"DROP \" --log-tcp-sequence --log-tcp-options --log-ip-options"
+  },
+  {
+    "table": "filter",
+    "chain": "logdrop",
+    "rule": "-j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "logdrop_dns",
+    "rule": "-j LOG --log-prefix \"DROP_DNS \" --log-tcp-sequence --log-tcp-options --log-ip-options"
+  },
+  {
+    "table": "filter",
+    "chain": "logdrop_dns",
+    "rule": "-j DROP"
+  },
+  {
+    "table": "filter",
+    "chain": "logdrop_ip",
+    "rule": "-j LOG --log-prefix \"DROP_IP \" --log-tcp-sequence --log-tcp-options --log-ip-options"
+  },
+  {
+    "table": "filter",
+    "chain": "logdrop_ip",
+    "rule": "-j DROP"
+  },
+  {
+    "table": "nat",
+    "chain": "PREROUTING",
+    "rule": "-d 86.189.234.199/32 -j GAME_VSERVER"
+  },
+  {
+    "table": "nat",
+    "chain": "PREROUTING",
+    "rule": "-d 86.189.234.199/32 -j VSERVER"
+  },
+  {
+    "table": "nat",
+    "chain": "PREROUTING",
+    "rule": "-d 169.254.141.71/32 -j GAME_VSERVER"
+  },
+  {
+    "table": "nat",
+    "chain": "PREROUTING",
+    "rule": "-d 169.254.141.71/32 -j VSERVER"
+  },
+  {
+    "table": "nat",
+    "chain": "POSTROUTING",
+    "rule": "-o ppp0 -j PUPNP"
+  },
+  {
+    "table": "nat",
+    "chain": "POSTROUTING",
+    "rule": "! -s 86.189.234.199/32 -o ppp0 -j MASQUERADE"
+  },
+  {
+    "table": "nat",
+    "chain": "POSTROUTING",
+    "rule": "! -s 169.254.141.71/32 -o eth0 -j MASQUERADE"
+  },
+  {
+    "table": "nat",
+    "chain": "POSTROUTING",
+    "rule": "-s 192.168.50.0/24 -d 192.168.50.0/24 -o br0 -j MASQUERADE"
+  },
+  {
+    "table": "nat",
+    "chain": "VSERVER",
+    "rule": "-j VUPNP"
+  }
+]

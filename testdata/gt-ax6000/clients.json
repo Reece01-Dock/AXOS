@@ -1,0 +1,27 @@
+[
+  {
+    "mac": "3A:10:02:7E:20:C3",
+    "ip": "192.168.50.35",
+    "hostname": "iPhone",
+    "interface": "br0",
+    "wireless": false,
+    "last_seen": "2026-09-23T21:18:18.771760922+01:00",
+    "lease_expires": "1970-01-02T00:59:53+01:00"
+  },
+  {
+    "mac": "2C:8D:48:0B:A1:BD",
+    "ip": "192.168.50.201",
+    "interface": "br0",
+    "wireless": false,
+    "last_seen": "2026-09-23T21:18:18.771763762+01:00",
+    "lease_expires": "0001-01-01T00:00:00Z"
+  },
+  {
+    "mac": "2C:F0:5D:0B:57:0E",
+    "ip": "192.168.50.49",
+    "interface": "br0",
+    "wireless": false,
+    "last_seen": "2026-09-23T21:18:18.771765062+01:00",
+    "lease_expires": "0001-01-01T00:00:00Z"
+  }
+]

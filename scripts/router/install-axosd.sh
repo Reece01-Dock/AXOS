@@ -6,22 +6,29 @@
 # for subsequent updates: atomic, checksum-verified, instantly reversible,
 # which a plain file copy is not.
 #
-# STATUS: written against documented Merlin conventions, NOT YET RUN on real
-# hardware (docs/ROADMAP.md Milestone 2). Verify USB_ROOT and the
-# services-start mechanism against the actual router before relying on this.
+# STATUS: first install verified on a real GT-AX6000 (2026-09-23) using
+# USB_ROOT=/jffs (no USB stick present). services-start + jffs2_scripts=1
+# confirmed. Prefer `axosctl deploy` for subsequent updates.
 #
 # Usage (run ON the router, as root, over SSH):
 #   ./install-axosd.sh /path/to/build/dir
 # where the build dir contains linux/arm64 binaries named axosd, axos-mcp,
 # axosctl (e.g. the output of `axosctl deploy -goos linux -goarch arm64`'s
 # staging directory, or a manual `go build` of each into one directory).
+# Also ensure: nvram set jffs2_scripts=1 && nvram commit
 set -eu
 
 BUILD_DIR="${1:?usage: install-axosd.sh <path-to-build-dir-containing-axosd,axos-mcp,axosctl>}"
 
-# (verify) USB mount point/label on this router — Merlin commonly mounts
-# USB storage under /tmp/mnt/<label> or /mnt/<label>; confirm with `mount`.
-USB_ROOT="${USB_ROOT:-/tmp/mnt/usb1}"
+# Prefer JFFS when no USB is mounted (common on a freshly flashed unit).
+# Override with USB_ROOT=/tmp/mnt/<label> when storage is available.
+if [ -z "${USB_ROOT:-}" ]; then
+  if [ -d /tmp/mnt/usb1 ]; then
+    USB_ROOT=/tmp/mnt/usb1
+  else
+    USB_ROOT=/jffs
+  fi
+fi
 AXOS_DIR="$USB_ROOT/axos"
 BIN_DIR="$AXOS_DIR/bin"
 # Bound to loopback only — see docs/security.md "MCP transport & access
@@ -29,7 +36,7 @@ BIN_DIR="$AXOS_DIR/bin"
 API_ADDR="${API_ADDR:-127.0.0.1:9090}"
 
 if [ ! -d "$USB_ROOT" ]; then
-    echo "error: USB root $USB_ROOT does not exist — set USB_ROOT to the correct mount point" >&2
+    echo "error: install root $USB_ROOT does not exist — set USB_ROOT to a writable mount (e.g. /jffs or /tmp/mnt/<label>)" >&2
     exit 1
 fi
 

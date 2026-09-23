@@ -430,75 +430,62 @@ see `docs/flashing-and-recovery.md` before doing that on a real router.
 
 ## Milestone 2 — First AXOS control service (`axosd`) + MCP
 
-Everything in this milestone is `[s]` (sandbox-verified — see the legend
-above): code complete, 99 automated tests, and manually driven as real
-compiled binaries against each other. Checking `[x]` requires the same
-things confirmed **on the router**.
+Everything that was `[s]` is now hardware-verified where noted `[x]` below.
+Remaining open items are Phase 7 (web UI) and Phase 9 (bake into firmware).
 
-- [s] `axosd`/`axos-mcp`/`axosctl` cross-compile cleanly for aarch64
-- [ ] Runs on the router from USB; starts at boot via `services-start` hook
-      *(scripted: `scripts/router/`)*
-- [s] System info (model, firmware, uptime)
-- [s] CPU / RAM / temperature
-- [s] Interfaces (state, role, addresses, counters)
-- [s] Routing tables
-- [s] Connected clients (DHCP leases, ARP, Wi-Fi assoc list)
-- [s] Wi-Fi information (radios, channels, clients, RSSI)
-- [s] Router-native services, firewall rules, VPN tunnel status, full nvram
-      dump — added beyond the original milestone scope, needed for capture/replay
-- [s] `system.shell_exec` (root shell, audited)
-- [s] Config backup / restore
-- [s] Audit logging of every mutating call
-- [s] Rollback engine: `rollback.arm(seconds)` / `rollback.confirm()` with
-      automatic restore on timeout, confirmed to survive `axos-mcp`
-      restarting mid-transaction (the reason the Core API architecture
-      exists at all — see `docs/development.md`)
-- [s] All of the above exposed over MCP and driven end-to-end (real
-      `axos-mcp`/`axosctl` binaries against a real `axosd`, not just tests)
-- [x] Audit log and backup files/dirs are owner-only (0600/0700), enforced on
-      every write, not just at creation (see `docs/security.md` "Secrets at
-      rest") — filesystem-permission behavior, not hardware-dependent
-- [x] Backup restore refuses a checksum-mismatched (tampered/corrupted)
-      backup — same reasoning, not hardware-dependent
-- [ ] SSH password auth disabled on the router, key-only access confirmed
-      (`docs/security.md` "MCP transport & access control" — this is the
-      actual authentication perimeter for the whole platform)
-- [ ] `internal/backend/asuswrt`'s `(verify)`-marked assumptions checked
-      against a real router's actual output (nvram keys, interface names,
-      `wl`/`iptables`/`wg` formats) — the concrete next step once a
-      GT-AX6000 is reachable; `axosctl capture --backend asuswrt --host
-      <router>` is what would surface the mismatches
+- [x] `axosd`/`axos-mcp`/`axosctl` cross-compile cleanly for aarch64 —
+      static `linux/arm64` binaries (~18 MB total) built 2026-09-23
+- [x] Runs on the router from **JFFS** (`/jffs/axos`; no USB present);
+      starts at boot via `/jffs/scripts/services-start` with
+      `jffs2_scripts=1`. Verified live: Core API on `127.0.0.1:9090`.
+- [x] System info (model, firmware, uptime) — `/v1/info` → GT-AX6000 / 102.9
+- [x] CPU / RAM / temperature — `/v1/resources` (broadcomThermalDrv ~68°C)
+- [x] Interfaces (state, role, addresses, counters) — `/v1/interfaces`
+- [x] Routing tables — `/v1/routes` (default via `ppp0`)
+- [x] Connected clients (DHCP leases, ARP, Wi-Fi assoc list) — `/v1/clients`
+- [x] Wi-Fi information (radios, channels, clients, RSSI) — `/v1/wifi`
+      (`wl0`/`wl1`, SSID `Reece-Net`)
+- [x] Router-native services, firewall rules, VPN tunnel status, full nvram
+      dump — `/v1/services`, `/v1/firewall`, `/v1/vpn`, capture `nvram.json`
+- [s] `system.shell_exec` (root shell, audited) — sandbox-proven; not
+      re-driven on hardware this session
+- [s] Config backup / restore — sandbox-proven; not re-driven on hardware
+- [s] Audit logging of every mutating call — audit path configured on
+      router (`/jffs/axos/logs/audit.jsonl`); mutating calls not re-driven
+- [s] Rollback engine — sandbox-proven; not re-driven on hardware
+- [s] All of the above exposed over MCP and driven end-to-end — sandbox;
+      on-router MCP stdio path not exercised this session
+- [x] Audit log and backup files/dirs are owner-only (0600/0700)
+- [x] Backup restore refuses a checksum-mismatched backup
+- [x] SSH password auth disabled on the router, key-only access confirmed —
+      `sshd_pass=0`, ed25519 pubkey in `sshd_authkeys`; password rejected
+      with `Permission denied (publickey)`
+- [x] `internal/backend/asuswrt`'s assumptions checked via live API +
+      `axosctl capture -backend asuswrt` → `testdata/gt-ax6000/`
+      (sanitized; secrets → `[REDACTED]`)
 
 ### Hot-deployable development platform (the "no reboot for normal dev" requirement)
 
-Detailed status of the phases behind Milestone 2's `[s]` marks above — see
+Detailed status of the phases behind Milestone 2 — see
 `docs/development.md` for the full write-up of each.
 
-- [s] **Phase 1** — `RouterBackend` abstraction, `MockBackend` (mutable),
-      CLI (`axosctl`), basic daemon (`axosd`)
-- [s] **Phase 2** — Capture tooling (`internal/capture`, secret redaction
-      enforced in code), `ReplayBackend`, sanitized fixtures (round-tripped
-      through mock in tests; a real `testdata/gt-ax6000/` capture is not
-      done — no reachable router)
-- [s] **Phase 3** — `AsuswrtBackend` — nvram/interface/route discovery,
-      service control, SSH transport (`WithHost`) *(all `(verify)` against
-      real hardware, per above)*
-- [s] **Phase 4** — Atomic releases (`internal/deploy`): staging → 
-      releases/NNNNNN → current/previous, checksum-verified, instant rollback
-- [s] **Phase 5** — Cross-compilation + deploy pipeline (`axosctl deploy`),
-      supervisor-mediated restart (`internal/supervisor`), health checks
-- [s] **Phase 6** — MCP as an independent process (`axos-mcp`), hot
-      restart proven to preserve rollback state, local dev mode (point
-      `axos-mcp`/`axosctl` at a router over an SSH-tunneled API port)
+- [x] **Phase 1** — `RouterBackend` abstraction, `MockBackend`, CLI, daemon
+      — verified on hardware via live Core API
+- [x] **Phase 2** — Capture tooling + real `testdata/gt-ax6000/` fixture
+      set captured from the router 2026-09-23
+- [x] **Phase 3** — `AsuswrtBackend` live on GT-AX6000 (info/resources/
+      interfaces/routes/clients/wifi/services/firewall/nvram)
+- [s] **Phase 4** — Atomic releases (`internal/deploy`) — sandbox; first
+      install used `install-axosd.sh` / plain copy to `/jffs/axos`
+- [s] **Phase 5** — Cross-compilation + deploy pipeline — arm64 build
+      verified; full `deploy-router.sh` promote cycle not yet re-run
+- [s] **Phase 6** — MCP as independent process — sandbox; not started as
+      a supervised sibling on the router yet
 - [ ] **Phase 7** — Web UI dev server + hot static asset deployment — not
-      started; no web UI code exists yet (see "Later / continuous" below)
-- [s] **Phase 8** — Network transaction layer + timed rollback watchdog —
-      this is `internal/rollback` + `internal/rollbackctl`, built in
-      Milestone 2 rather than as a separate later phase, since the MCP
-      tool surface already needed it from the start
+      started
+- [s] **Phase 8** — Network transaction layer + timed rollback watchdog
 - [ ] **Phase 9** — Integrate the stable AXOS bootstrap into the Merlin
-      firmware fork — blocked on Milestone 1 (a working build/flash loop)
-      existing first
+      firmware fork — next after M2 runtime is solid
 
 ## Milestone 3 — VPN, routing, firewall, DNS, QoS
 

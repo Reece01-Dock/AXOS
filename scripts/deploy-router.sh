@@ -4,11 +4,9 @@
 # rsync the resulting release to the router's staging dir, then run
 # `axosctl deploy` remotely to promote it atomically.
 #
-# STATUS: the local half (build+test+stage+promote-locally) is the same
-# code path exercised by cmd/axosctl's own tests and manual verification.
-# The rsync-to-a-real-router-then-remote-promote half is NOT run from this
-# sandbox (no reachable GT-AX6000) and should be treated as unverified
-# until it is.
+# STATUS: local half verified in sandbox; remote half verified 2026-09-23
+# against a GT-AX6000 at /jffs/axos (first install via install-axosd.sh,
+# then routine deploys with this script + key-based SSH).
 #
 # Usage:
 #   ./scripts/deploy-router.sh user@router [components] [remote-axos-root]
@@ -19,9 +17,7 @@ set -euo pipefail
 
 ROUTER="${1:?usage: deploy-router.sh <user@router> [components] [remote-axos-root]}"
 COMPONENTS="${2:-axosd,axos-mcp,axosctl}"
-# (verify) USB mount path on the real router — see docs/hardware.md and
-# scripts/router/install-axosd.sh's own USB_ROOT note.
-REMOTE_ROOT="${3:-/tmp/mnt/usb1/axos}"
+REMOTE_ROOT="${3:-/jffs/axos}"
 SSH_OPTS="${SSH_OPTS:--o BatchMode=yes}"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

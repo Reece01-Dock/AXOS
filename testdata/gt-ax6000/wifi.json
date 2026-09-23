@@ -1,0 +1,20 @@
+[
+  {
+    "interface": "wl0",
+    "band": "2.4GHz",
+    "enabled": true,
+    "ssid": "Reece-Net",
+    "channel": 0,
+    "channel_width_mhz": 20,
+    "client_count": 0
+  },
+  {
+    "interface": "wl1",
+    "band": "5GHz",
+    "enabled": true,
+    "ssid": "Reece-Net",
+    "channel": 0,
+    "channel_width_mhz": 20,
+    "client_count": 0
+  }
+]
