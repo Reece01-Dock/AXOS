@@ -208,6 +208,46 @@
       html || "<tr><td colspan='4'>None</td></tr>";
   }
 
+  function renderPolicy(list) {
+    var html = "";
+    (list || []).forEach(function (r) {
+      html +=
+        "<tr><td>" +
+        esc(r.id) +
+        "</td><td>" +
+        esc(r.source) +
+        "</td><td>" +
+        esc(r.interface) +
+        "</td><td>" +
+        (r.enabled ? "yes" : "no") +
+        "</td><td>" +
+        esc(r.description || "—") +
+        '</td><td><input type="button" class="button_gen axos-pol-del" data-id="' +
+        esc(r.id) +
+        '" value="Delete"></td></tr>';
+    });
+    document.getElementById("axos-policy-body").innerHTML =
+      html || "<tr><td colspan='6'>None</td></tr>";
+  }
+
+  function renderFw(rules) {
+    var html = "";
+    var n = 0;
+    (rules || []).forEach(function (r) {
+      if (r.table && r.table !== "filter") return;
+      if (n >= 25) return;
+      n++;
+      html +=
+        "<tr><td>" +
+        esc(r.chain) +
+        "</td><td><code>" +
+        esc(r.rule) +
+        '</code></td><td></td></tr>';
+    });
+    document.getElementById("axos-fw-body").innerHTML =
+      html || "<tr><td colspan='3'>None</td></tr>";
+  }
+
   function refresh() {
     setStatus("loading…", false);
     Promise.all([
@@ -230,6 +270,12 @@
       get("/v1/backups").catch(function () {
         return [];
       }),
+      get("/v1/policy").catch(function () {
+        return [];
+      }),
+      get("/v1/firewall").catch(function () {
+        return [];
+      }),
     ])
       .then(function (all) {
         var info = all[0],
@@ -240,7 +286,9 @@
           qos = all[5] || {},
           profiles = all[6] || [],
           dhcp = all[7] || [],
-          backups = all[8] || [];
+          backups = all[8] || [],
+          policy = all[9] || [],
+          firewall = all[10] || [];
 
         renderSys(info);
         renderRes(res);
@@ -248,6 +296,8 @@
         renderClients(clients);
         renderVpn(profiles);
         renderDhcp(dhcp);
+        renderPolicy(policy);
+        renderFw(firewall);
 
         document.getElementById("axos-dns-wan").value = (dns.wan_upstreams || []).join(" ");
         document.getElementById("axos-dns-dot").textContent = dns.dot_enabled
@@ -315,12 +365,36 @@
     };
   }
 
+  function bindPolicyDelete() {
+    document.getElementById("axos-policy-body").onclick = function (ev) {
+      var t = ev.target;
+      if (!t || t.className.indexOf("axos-pol-del") < 0) return;
+      var id = t.getAttribute("data-id");
+      if (!id || !confirm("Delete policy " + id + "?")) return;
+      withRollback("merlin-ui-policy-del", function () {
+        return del("/v1/policy/" + encodeURIComponent(id));
+      })
+        .then(refresh)
+        .catch(function (e) {
+          alert(String(e.message || e));
+        });
+    };
+  }
+
+  function parseAvgMs(output) {
+    // busybox/iputils: "round-trip min/avg/max = 1.2/3.4/5.6 ms" or "rtt min/avg/max/mdev = ..."
+    var m = String(output || "").match(/(?:round-trip|rtt)[^=]*=\s*([\d.]+)\/([\d.]+)\/([\d.]+)/i);
+    if (m) return parseFloat(m[2]);
+    return null;
+  }
+
   global.axosEmbedInit = function () {
     if (!token()) setStatus("missing UI token — run axos-merlin-ui.sh", false);
 
     document.getElementById("axos-refresh").onclick = refresh;
     bindVpnButtons();
     bindDhcpDelete();
+    bindPolicyDelete();
 
     document.getElementById("axos-dns-apply").onclick = function () {
       var wan = document.getElementById("axos-dns-wan").value.trim().split(/\s+/).filter(Boolean);
@@ -424,6 +498,81 @@
         .catch(function (e) {
           st.textContent = String(e.message || e);
         });
+    };
+
+    document.getElementById("axos-pol-add").onclick = function () {
+      var source = document.getElementById("axos-pol-src").value.trim();
+      var iface = document.getElementById("axos-pol-if").value.trim();
+      var desc = document.getElementById("axos-pol-desc").value.trim();
+      var enabled = document.getElementById("axos-pol-en").checked;
+      if (!source || !iface) {
+        alert("Source and interface required");
+        return;
+      }
+      withRollback("merlin-ui-policy-add", function () {
+        return post("/v1/policy", {
+          source: source,
+          interface: iface,
+          description: desc,
+          enabled: enabled,
+        });
+      })
+        .then(function () {
+          document.getElementById("axos-pol-src").value = "";
+          document.getElementById("axos-pol-if").value = "";
+          document.getElementById("axos-pol-desc").value = "";
+          refresh();
+        })
+        .catch(function (e) {
+          alert(String(e.message || e));
+        });
+    };
+
+    document.getElementById("axos-ep-ping").onclick = function () {
+      var hosts = document
+        .getElementById("axos-ep-hosts")
+        .value.trim()
+        .split(/\s+/)
+        .filter(Boolean);
+      var out = document.getElementById("axos-ep-out");
+      if (!hosts.length) {
+        out.textContent = "no hosts";
+        return;
+      }
+      out.textContent = "pinging " + hosts.length + "…";
+      var chain = Promise.resolve([]);
+      hosts.forEach(function (h) {
+        chain = chain.then(function (rows) {
+          return post("/v1/diag/ping", { host: h, count: 3 })
+            .then(function (r) {
+              var avg = parseAvgMs(r.output);
+              rows.push({
+                host: h,
+                ok: !!r.ok,
+                avg_ms: avg,
+                line: avg != null ? avg.toFixed(1) + " ms avg" : r.ok ? "ok (no rtt)" : "fail",
+              });
+              return rows;
+            })
+            .catch(function (e) {
+              rows.push({ host: h, ok: false, avg_ms: null, line: String(e.message || e) });
+              return rows;
+            });
+        });
+      });
+      chain.then(function (rows) {
+        rows.sort(function (a, b) {
+          if (a.avg_ms == null && b.avg_ms == null) return 0;
+          if (a.avg_ms == null) return 1;
+          if (b.avg_ms == null) return -1;
+          return a.avg_ms - b.avg_ms;
+        });
+        out.textContent = rows
+          .map(function (r, i) {
+            return i + 1 + ". " + r.host + "  " + r.line;
+          })
+          .join("\n");
+      });
     };
 
     refresh();

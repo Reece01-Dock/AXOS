@@ -156,6 +156,46 @@ function initial(){
 							</table>
 
 							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="2">VPN endpoint ping</td></tr></thead>
+								<tbody>
+									<tr>
+										<th>Hosts</th>
+										<td>
+											<input type="text" id="axos-ep-hosts" class="input_32_table" style="width:360px"
+												value="1.1.1.1 8.8.8.8 9.9.9.9" />
+											<input type="button" class="button_gen" id="axos-ep-ping" value="Rank by ping">
+											<span class="hint">space-separated</span>
+										</td>
+									</tr>
+									<tr><th>Result</th><td><pre id="axos-ep-out" class="axos-pre">—</pre></td></tr>
+								</tbody>
+							</table>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="6">VPN Director (policy)</td></tr>
+								<tr><th>ID</th><th>Source</th><th>Interface</th><th>Enabled</th><th>Desc</th><th></th></tr></thead>
+								<tbody id="axos-policy-body"></tbody>
+								<tbody>
+									<tr>
+										<th>Add</th>
+										<td colspan="5">
+											<input type="text" id="axos-pol-src" placeholder="MAC / IP / CIDR" class="input_20_table" />
+											<input type="text" id="axos-pol-if" placeholder="wan / wgc1 / ovpnc1" class="input_15_table" />
+											<input type="text" id="axos-pol-desc" placeholder="description" class="input_15_table" />
+											<label><input type="checkbox" id="axos-pol-en" checked> enabled</label>
+											<input type="button" class="button_gen" id="axos-pol-add" value="Add">
+										</td>
+									</tr>
+								</tbody>
+							</table>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
+								<thead><tr><td colspan="3">Firewall (filter, first 25)</td></tr>
+								<tr><th>Chain</th><th>Rule</th><th></th></tr></thead>
+								<tbody id="axos-fw-body"></tbody>
+							</table>
+
+							<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable axos-table">
 								<thead><tr><td colspan="4">DHCP reservations</td></tr>
 								<tr><th>MAC</th><th>IP</th><th>Hostname</th><th></th></tr></thead>
 								<tbody id="axos-dhcp-body"></tbody>

@@ -48,4 +48,10 @@ type Decision struct {
 }
 
 // Ensure EthernetOptimiser satisfies Interface at compile time.
-var _ Interface = (*EthernetOptimiser)(nil)
+var (
+	_ Interface = (*EthernetOptimiser)(nil)
+	_ Interface = (*WiFiOptimiser)(nil)
+	_ Interface = (*VPNOptimiser)(nil)
+	_ Interface = (*LatencyOptimiser)(nil)
+	_ Interface = (*PerformanceMode)(nil)
+)

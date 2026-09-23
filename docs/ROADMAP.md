@@ -26,8 +26,9 @@ actually verified" for exactly what was run), but it is not `[x]`. As of
   DNS/DHCP/QoS, WireGuard import, OpenVPN slots, VPN Director policy,
   firewall apply/delete, secrets dir). Cloudflare WARP registration and
   full auto endpoint-selection loops remain thinner (WG-import path / ping).
-- **Milestone 4** has an `internal/optimiser` skeleton (`[s]`); live
-  optimisation loops are not hardware-verified yet.
+- **Milestone 4** has `internal/optimiser` skeletons for ethernet / Wi-Fi /
+  VPN / latency / Performance Mode (`[s]`); live optimisation loops are
+  not hardware-verified yet.
 
 ## Milestone 1 — Prove the build → flash → recover loop
 
@@ -527,7 +528,8 @@ Detailed status of the phases behind Milestone 2 — see
 - [x] Bypass rules (device stays on WAN) — policy route with
       `interface=wan` (same API)
 - [s] VPN endpoint latency benchmarking + automatic endpoint selection —
-      use `POST /v1/diag/ping` per endpoint; no auto-picker loop yet
+      Merlin AXOS tab **VPN endpoint ping** ranks hosts via
+      `POST /v1/diag/ping`; no auto-apply to a profile yet
 - [x] DNS configuration — `GET|POST /v1/dns` (WAN upstreams + DoT flags
       from nvram; live read verified)
 - [x] DHCP reservations — `GET|POST /v1/dhcp/reservations` + DELETE by MAC
@@ -551,19 +553,25 @@ KEEP OR REVERT → CONTINUE. No unbenchmarked "tuning".
 
 - [s] Ethernet optimiser — `internal/optimiser` Observe/Baseline/Propose/
       Apply/Measure/Decide skeleton + unit test (not run against hardware)
-- [ ] Wi-Fi optimiser (channel scan, utilisation, candidate configs, A/B compare)
-- [ ] VPN optimiser (endpoint selection, MTU, fast paths)
-- [ ] Latency optimiser (loaded-latency driven)
-- [ ] AXOS Performance Mode (orchestrates the above with rollback arming)
+- [s] Wi-Fi optimiser (channel scan, utilisation, candidate configs, A/B compare)
+      — interface skeleton + unit test; no channel scan / apply yet
+- [s] VPN optimiser (endpoint selection, MTU, fast paths) — skeleton + unit
+      test; Merlin UI ranks endpoints by ping (manual)
+- [s] Latency optimiser (loaded-latency driven) — skeleton + unit test
+- [s] AXOS Performance Mode (orchestrates the above with rollback arming) —
+      `PerformanceMode` skeleton wires subsystem optimisers; no live loop
 
 ## Later / continuous
 
 - [x] AXOS web UI (Phase 7) — thin Core API client at `/` (same backend as
       MCP/CLI).
-- [x] Custom AXOS sections inside the stock ASUS httpd UI — **AXOS → Control**
-      menu via JFFS bind-mount (`docs/merlin-ui.md`); iterate with
-      `deploy-router.sh`, no firmware rebuild. Session-gated Merlin page +
-      LAN API token (`X-Axos-UI-Token`).
+- [x] Custom AXOS sections inside the stock ASUS httpd UI — **Administration →
+      AXOS** tab (after Firmware Upgrade) via JFFS bind-mount
+      (`docs/merlin-ui.md`). Control panel (not JSON dumps): system/resources/
+      Wi-Fi/clients, DNS/QoS apply, diagnostics, VPN up/down + endpoint ping,
+      VPN Director policy, firewall preview, DHCP reservations, backups.
+      Session-gated Merlin page + LAN API token (`X-Axos-UI-Token`).
+      Iterate with `deploy-router.sh` / copy to `merlin-ui/`, no firmware rebuild.
 - [ ] Package/module system for optional functionality
 - [ ] Historical metrics on USB storage (never internal flash)
 - [ ] Backup encryption at rest, once a key-management approach is decided
