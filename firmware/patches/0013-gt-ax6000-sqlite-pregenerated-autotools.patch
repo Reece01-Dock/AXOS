@@ -50,11 +50,21 @@ diff --git a/release/src/router/Makefile b/release/src/router/Makefile
 index 2a14c09073..3a1b96a8f7 100644
 --- a/release/src/router/Makefile
 +++ b/release/src/router/Makefile
-@@ -5492,10 +5492,10 @@ mxl371x_sdk-install:
+@@ -5467,12 +5492,23 @@ mxl371x_sdk-install:
  # Media libraries
-
+ 
  sqlite/stamp-h1:
 -	cd sqlite && autoreconf -i -f && \
++	@# Force the shipped autotools scaffolding to a fixed, guaranteed-old mtime
++	@# before configuring, and the resulting Makefile to a guaranteed-newer one
++	@# after -- sqlite's configure.ac never calls AM_MAINTAINER_MODE, so
++	@# --disable-maintainer-mode above is a no-op and automake's default
++	@# auto-remake rule (Makefile.in: Makefile.am configure.ac ...) stays
++	@# unconditionally active; it only fires on an actual mtime race, but one
++	@# was confirmed on a real build (git apply's write order isn't guaranteed
++	@# relative to a fresh submodule checkout's), so pin it explicitly rather
++	@# than rely on incidental ordering.
++	touch -d 2020-01-01 sqlite/Makefile.am sqlite/configure.ac sqlite/aclocal.m4 sqlite/configure sqlite/Makefile.in
 +	cd sqlite && \
  	CC=$(CC) CFLAGS="$(if $(RTCONFIG_DEBUG),-g -Wall,-O2) $(EXTRACFLAGS) -ffunction-sections -fdata-sections -fPIC" \
  		LDFLAGS="-ffunction-sections -fdata-sections -Wl,--gc-sections -lpthread -ldl" \
@@ -62,7 +72,10 @@ index 2a14c09073..3a1b96a8f7 100644
  		--disable-readline --disable-dynamic-extensions --enable-threadsafe \
 -		--disable-dependency-tracking
 +		--disable-dependency-tracking --disable-maintainer-mode
++	touch -d 2020-01-02 sqlite/Makefile sqlite/config.status
  	touch $@
+ 
+ sqlite: sqlite/stamp-h1
 diff --git a/release/src/router/sqlite/Makefile.in b/release/src/router/sqlite/Makefile.in
 new file mode 100644
 index 0000000000..71211f7710

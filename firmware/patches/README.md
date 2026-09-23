@@ -122,6 +122,26 @@ shipped file away from what `build.sh`'s patch-apply idempotency check
 for this patch specifically. Fixed by adding `--disable-maintainer-mode`
 to the same `$(CONFIGURE)` call `0013` already modifies.
 
+**Second follow-up**: `--disable-maintainer-mode` turned out to be a
+no-op for sqlite specifically — confirmed via `grep AM_MAINTAINER_MODE
+sqlite/configure.ac`, which matches nothing. Without that macro,
+automake's default `Makefile.in: Makefile.am configure.ac ...`
+auto-remake rule is unconditionally active regardless of the configure
+flag; it only *fires* on an actual mtime race between the shipped
+scaffolding and the derived `Makefile`, but a real one was confirmed
+(`git apply`'s write order isn't guaranteed relative to a fresh
+submodule checkout's, and this repo's own accidental whole-tree
+`git checkout --` during testing made it worse). Fixed for real by
+pinning explicit mtimes in the `sqlite/stamp-h1` recipe itself —
+`touch -d 2020-01-01` on the scaffolding before configuring, `touch -d
+2020-01-02` on the resulting `Makefile`/`config.status` after — so
+Make's own staleness check can never see the scaffolding as newer than
+the Makefile it produced, independent of wall-clock timing or automake
+version behavior. Verified directly: with the shipped `./configure`
+run and these touches applied, `make -n Makefile.in` reports "up to
+date" and a full `make -n` goes straight to real compiler invocations
+with zero autoreconf/automake output.
+
 ## `0014`: incremental builds, not a compile-bug fix
 
 `0014-incremental-router-sysdep-sync.patch` (originally drafted as `0003`,
