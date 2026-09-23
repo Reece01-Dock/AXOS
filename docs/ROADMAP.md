@@ -13,10 +13,16 @@ exists but hasn't been executed/verified at all yet.
 
 `[s]` is a real, meaningful bar (see `docs/development.md` "Status: what's
 actually verified" for exactly what was run), but it is not `[x]`. As of
-2026-09-23, Milestone 1 stock Merlin is flashed and verified on a real
-GT-AX6000 (see flash log in `docs/flashing-and-recovery.md`). Remaining
-`[s]` / `(verify)` marks apply to AXOS-specific code and asuswrt backend
-assumptions that have not yet been driven end-to-end on that hardware.
+2026-09-23:
+
+- **Milestone 1** is complete on a physical GT-AX6000 (stock Merlin
+  `3006.102-wifi6` + AXOS login-title marker flashed and verified — see
+  `docs/flashing-and-recovery.md`).
+- **Milestone 2** runtime is on the router: `axosd` under `/jffs/axos`,
+  Core API on loopback, live reads verified, sanitized
+  `testdata/gt-ax6000/` capture checked in, SSH is key-only
+  (`docs/ssh-access.md`). Remaining M2 work: Phase 7 (web UI), Phase 9
+  (bake into firmware), and re-driving mutating/MCP paths on hardware.
 
 ## Milestone 1 — Prove the build → flash → recover loop
 
@@ -47,8 +53,9 @@ optional: cable-linked 2.5GbE retest (step 6).
 - [x] 7. 2.4 GHz Wi-Fi works — `wl` on eth6: SSID `Reece-Net`, ch 2.
 - [x] 8. 5 GHz Wi-Fi works — `wl` on eth7: SSID `Reece-Net`, ch 36/80.
 - [x] 9. ASUS web UI works — login + authenticated `appGet.cgi`.
-- [x] 10. SSH works — `sshd_enable=1`, port 22, password login as `Reece`;
-       `uname` reports `ASUSWRT-Merlin`.
+- [x] 10. SSH works — `sshd_enable=1`, port 22; initially password login as
+       `Reece`, then hardened to **key-only** (`sshd_pass=0`) in Milestone 2
+       — see `docs/ssh-access.md`. `uname` reports `ASUSWRT-Merlin`.
 - [x] 11. Recovery mode verified (bootloader rescue + firmware restoration —
        **before** this Merlin flash the unit was recovered from a bad
        custom image via ASUS Firmware Restoration — recorded by operator).
