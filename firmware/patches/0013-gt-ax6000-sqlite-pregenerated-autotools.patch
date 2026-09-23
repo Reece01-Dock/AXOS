@@ -50,7 +50,7 @@ diff --git a/release/src/router/Makefile b/release/src/router/Makefile
 index 2a14c09073..3a1b96a8f7 100644
 --- a/release/src/router/Makefile
 +++ b/release/src/router/Makefile
-@@ -5492,7 +5492,7 @@ mxl371x_sdk-install:
+@@ -5492,10 +5492,10 @@ mxl371x_sdk-install:
  # Media libraries
 
  sqlite/stamp-h1:
@@ -59,6 +59,10 @@ index 2a14c09073..3a1b96a8f7 100644
  	CC=$(CC) CFLAGS="$(if $(RTCONFIG_DEBUG),-g -Wall,-O2) $(EXTRACFLAGS) -ffunction-sections -fdata-sections -fPIC" \
  		LDFLAGS="-ffunction-sections -fdata-sections -Wl,--gc-sections -lpthread -ldl" \
  		$(CONFIGURE) --prefix=/usr --enable-shared --enable-static \
+ 		--disable-readline --disable-dynamic-extensions --enable-threadsafe \
+-		--disable-dependency-tracking
++		--disable-dependency-tracking --disable-maintainer-mode
+ 	touch $@
 diff --git a/release/src/router/sqlite/Makefile.in b/release/src/router/sqlite/Makefile.in
 new file mode 100644
 index 0000000000..71211f7710

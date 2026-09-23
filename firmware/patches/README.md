@@ -108,6 +108,20 @@ exit code 0 and produced a real, signed
 `docs/ROADMAP.md`'s Milestone 1 section for the full story and the
 image's hash/manifest.
 
+**Follow-up, found during real incremental-rebuild testing**: dropping
+the explicit `autoreconf -i -f` call isn't sufficient on its own for
+idempotency. Without `--disable-maintainer-mode` on the `$(CONFIGURE)`
+call, sqlite's own *generated* Makefile still carries automake's normal
+auto-remake rules and can regenerate `Makefile.in` on a plain `make`
+invocation, with no explicit `autoreconf` call needed — confirmed via a
+real build: `sqlite/Makefile.in`'s `am__DIST_COMMON` gained an `INSTALL`
+entry it didn't have right after the patch was first applied, purely
+from running a normal build afterward. That permanently drifted the
+shipped file away from what `build.sh`'s patch-apply idempotency check
+(added alongside `0014`) expects, breaking `resume`/repeat `build` calls
+for this patch specifically. Fixed by adding `--disable-maintainer-mode`
+to the same `$(CONFIGURE)` call `0013` already modifies.
+
 ## `0014`: incremental builds, not a compile-bug fix
 
 `0014-incremental-router-sysdep-sync.patch` (originally drafted as `0003`,
