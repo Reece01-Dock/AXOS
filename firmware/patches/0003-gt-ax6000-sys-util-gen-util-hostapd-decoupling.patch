@@ -1,0 +1,52 @@
+Fix a real upstream build bug (not an AXOS feature): release/src/router/Makefile's
+`rc:` and `bwdpi_source:` prerequisite lists only build the `sys_util` and
+`gen_util` static libraries when BOTH the chip family (RTCONFIG_HND_ROUTER_AX_675X /
+_6756 / _6710 / RTCONFIG_BCM_502L07P2) AND RTCONFIG_BRCM_HOSTAPD are "y" —
+`$(if $(and $(RTCONFIG_HND_ROUTER_AX_6756),$(RTCONFIG_BRCM_HOSTAPD)),sys_util
+gen_util)`. But release/src/router/rc/Makefile's own LDFLAGS
+(`ifeq ($(or $(HND_ROUTER_AX_675X),$(HND_ROUTER_AX_6756),$(HND_ROUTER_AX_6710),
+$(BCM_502L07P2)),y) ... -lgen_util ... -lsys_util`) link against both
+libraries whenever the chip family matches, with no RTCONFIG_BRCM_HOSTAPD
+check at all. For GT-AX6000 (chip 4912, RTCONFIG_HND_ROUTER_AX_6756=y) this
+mismatch only surfaces once RTCONFIG_BRCM_HOSTAPD is actually off (see
+build.sh and 0a1cab5/3897483): the linker looks for -lsys_util/-lgen_util
+because the chip family requires them, but the libraries themselves were
+never built because their prerequisite additionally required hostapd.
+
+Confirmed via a real build attempt: `make gt-ax6000` (with
+RTCONFIG_BRCM_HOSTAPD genuinely off — see the firmware/build.sh command-line
+overrides, which pass each flag as truly empty, not "n", so this generated
+.config actually reflects them as off) fails linking `rc` with "cannot find
+-lgen_util" / "cannot find -lsys_util".
+
+Fix: drop the RTCONFIG_BRCM_HOSTAPD requirement from these four prerequisite
+clauses (both in the `rc:` and `bwdpi_source:` targets), so sys_util/gen_util
+build whenever the chip family alone calls for them — matching what
+rc/Makefile's LDFLAGS already assume. This is a general Makefile
+inconsistency (the two lists were never meant to disagree), not something
+specific to disabling hostapd for this model.
+
+`git apply --check`-verified against the pinned tag (3004.388.9). Not yet
+verified past that point in a completed build — see docs/build-environment.md
+and docs/ROADMAP.md.
+
+diff --git a/release/src/router/Makefile b/release/src/router/Makefile
+index fe6950ea62..8487a34b1b 100644
+--- a/release/src/router/Makefile
++++ b/release/src/router/Makefile
+@@ -3342,7 +3342,7 @@ wb: json-c openssl libxml2 curl
+ wb-install:
+ 	$(MAKE) -C wb INSTALLDIR=$(INSTALLDIR)/wb install
+
+-rc: shared libev-4.33 $(if $(BCM_502L07P2),ethctl_lib) nvram$(BCMEX)$(EX7) libdisk $(if $(RTCONFIG_LIB_CODB),libcodb) $(if $(RTCONFIG_FBWIFI),fb_wifi) $(if $(RTCONFIG_QTN),libqcsapi_client) $(if $(CONFIG_LIBBCM),libbcm) $(if $(RTCONFIG_BWDPI),bwdpi_source) $(if $(RTCONFIG_USB_SMS_MODEM),smspdu) $(if $(RTCONFIG_HND_ROUTER),bcm_flashutil bcm_util bcm_boardctl) $(if $(RTCONFIG_OPENVPN),libovpn) $(if $(RTCONFIG_LANTIQ),libfapi-0.1) $(if $(RTCONFIG_CFGSYNC), $(CFGSYNC_PKG) $(if $(RTCONFIG_AMAS), amas-utils) $(if $(RTCONFIG_LANTIQ),hostapd-2.6)) json-c $(if $(or $(RTCONFIG_FRS_LIVE_UPDATE),$(RTCONFIG_FRS_FEEDBACK),$(RTCONFIG_URLFW),$(RTCONFIG_SOFTWIRE46)), curl) $(if $(and $(RTCONFIG_HND_ROUTER_AX_675X),$(RTCONFIG_BRCM_HOSTAPD)),sys_util gen_util) $(if $(and $(RTCONFIG_HND_ROUTER_AX_6756),$(RTCONFIG_BRCM_HOSTAPD)),sys_util gen_util) $(if $(and $(RTCONFIG_HND_ROUTER_AX_6710),$(RTCONFIG_BRCM_HOSTAPD)),sys_util gen_util) $(if $(and $(RTCONFIG_BCM_502L07P2),$(RTCONFIG_BRCM_HOSTAPD)),sys_util gen_util) $(if $(RTCONFIG_BRCM_HOSTAPD),wpa_supplicant-2.7) $(if $(RTCONFIG_MXL371X),mxl371x_sdk)
++rc: shared libev-4.33 $(if $(BCM_502L07P2),ethctl_lib) nvram$(BCMEX)$(EX7) libdisk $(if $(RTCONFIG_LIB_CODB),libcodb) $(if $(RTCONFIG_FBWIFI),fb_wifi) $(if $(RTCONFIG_QTN),libqcsapi_client) $(if $(CONFIG_LIBBCM),libbcm) $(if $(RTCONFIG_BWDPI),bwdpi_source) $(if $(RTCONFIG_USB_SMS_MODEM),smspdu) $(if $(RTCONFIG_HND_ROUTER),bcm_flashutil bcm_util bcm_boardctl) $(if $(RTCONFIG_OPENVPN),libovpn) $(if $(RTCONFIG_LANTIQ),libfapi-0.1) $(if $(RTCONFIG_CFGSYNC), $(CFGSYNC_PKG) $(if $(RTCONFIG_AMAS), amas-utils) $(if $(RTCONFIG_LANTIQ),hostapd-2.6)) json-c $(if $(or $(RTCONFIG_FRS_LIVE_UPDATE),$(RTCONFIG_FRS_FEEDBACK),$(RTCONFIG_URLFW),$(RTCONFIG_SOFTWIRE46)), curl) $(if $(RTCONFIG_HND_ROUTER_AX_675X),sys_util gen_util) $(if $(RTCONFIG_HND_ROUTER_AX_6756),sys_util gen_util) $(if $(RTCONFIG_HND_ROUTER_AX_6710),sys_util gen_util) $(if $(RTCONFIG_BCM_502L07P2),sys_util gen_util) $(if $(RTCONFIG_BRCM_HOSTAPD),wpa_supplicant-2.7) $(if $(RTCONFIG_MXL371X),mxl371x_sdk)
+ 	@$(SEP)
+ # Dig into our collection of prebuilt objects based on model
+ 	@-rm -f rc/prebuild/*.o || true
+@@ -7559,5 +7559,5 @@ tftp-hpa-install: tftp-hpa
+ tftp-hpa-clean:
+ 	[ ! -f tftp-hpa/Makefile ] || $(MAKE) -C tftp-hpa distclean
+
+-bwdpi_source: sqlite $(if $(RTCONFIG_HND_ROUTER),bcm_flashutil bcm_util bcm_boardctl) $(if $(and $(RTCONFIG_HND_ROUTER_AX_675X),$(RTCONFIG_BRCM_HOSTAPD)),sys_util gen_util) $(if $(RTCONFIG_BCM4906_504),sys_util gen_util) $(if $(and $(RTCONFIG_HND_ROUTER_AX_6756),$(RTCONFIG_BRCM_HOSTAPD)),sys_util gen_util) $(if $(and $(RTCONFIG_HND_ROUTER_AX_6710),$(RTCONFIG_BRCM_HOSTAPD)),sys_util gen_util) $(if $(and $(BCM_502L07P2),$(RTCONFIG_BRCM_HOSTAPD)),sys_util gen_util)
++bwdpi_source: sqlite $(if $(RTCONFIG_HND_ROUTER),bcm_flashutil bcm_util bcm_boardctl) $(if $(RTCONFIG_HND_ROUTER_AX_675X),sys_util gen_util) $(if $(RTCONFIG_BCM4906_504),sys_util gen_util) $(if $(RTCONFIG_HND_ROUTER_AX_6756),sys_util gen_util) $(if $(RTCONFIG_HND_ROUTER_AX_6710),sys_util gen_util) $(if $(BCM_502L07P2),sys_util gen_util)
+ 	cd bwdpi_source && CC=$(CC) && $(MAKE) all

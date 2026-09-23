@@ -1,0 +1,120 @@
+Fix real upstream build bugs (not AXOS features): the prebuilt GT-AX6000
+rc/prebuild/GT-AX6000/hostapd_config_6e.o — linked into `rc` unconditionally
+as of 0004-gt-ax6000-hostapd-config-6e-hostapd-decoupling.patch, since core
+WLAN code (services.c's apply_config_to_driver()) needs it regardless of
+RTCONFIG_BRCM_HOSTAPD — itself needs several helper symbols that are, in
+turn, gated behind CONFIG_HOSTAPD or RTCONFIG_BRCM_HOSTAPD one level further
+down. Confirmed via a real build attempt after 0004: `make gt-ax6000` still
+fails linking `rc`, with "undefined reference to `wl_ascii_str_to_hex_str'"
+and, separately, `bytes_to_hex`/`dm_unregister_app_restart_info` (all three
+confirmed needed by hostapd_config_6e.o via `nm`, cross-checked against
+every symbol every GT-AX6000 prebuilt object defines).
+
+- common_utils.o (shared/Makefile, providing bytes_to_hex and
+  dm_unregister_app_restart_info among others): has no internal
+  CONFIG_HOSTAPD logic of its own (a plain utility file), but its inclusion
+  in `shared`'s OBJS was gated on RTCONFIG_BRCM_HOSTAPD — the same
+  "downstream helper coupled to the feature flag, when the actual code that
+  needs it is unconditional" shape as 0003's sys_util/gen_util and 0004's
+  hostapd_config_6e.o fixes. Dropped that gate.
+
+- wl_ascii_str_to_hex_str: normally declared/defined in shared/wlif_utils.c
+  under CONFIG_HOSTAPD. First attempt was to duplicate it there under a
+  matching `#ifndef CONFIG_HOSTAPD` — but that didn't fix the link failure,
+  because shared/wlif_utils.c (and its wlif_utils_ax.c sibling) turn out to
+  be compiled at all only when CONFIG_BCMWL5 is "y" (see shared/Makefile) —
+  an older, non-AX driver generation flag that's off for this HND_ROUTER_AX
+  chip, so neither file is ever built here regardless of CONFIG_HOSTAPD.
+  Moved the actual definition into shared/common_utils.c instead (a
+  verbatim copy of the CONFIG_HOSTAPD-gated version), since that file
+  genuinely is always compiled (per the fix above). Kept a declaration in
+  wlif_utils.h too, under the same `#ifndef CONFIG_HOSTAPD`, purely so any
+  other translation unit that includes that header still sees a matching
+  prototype.
+
+`git apply --check`-verified against the pinned tag (3004.388.9), applied on
+top of 0001-0005. Not yet verified past that point in a completed build —
+see docs/build-environment.md and docs/ROADMAP.md.
+
+diff --git a/release/src/router/shared/Makefile b/release/src/router/shared/Makefile
+index 1fe014ad43..5535c8548a 100644
+--- a/release/src/router/shared/Makefile
++++ b/release/src/router/shared/Makefile
+@@ -440,9 +440,14 @@ endif
+ ifeq ($(RTCONFIG_GEFORCENOW), y)
+ OBJS += nvgfn.o
+ endif
+-ifeq ($(RTCONFIG_BRCM_HOSTAPD),y)
++# common_utils.o (bytes_to_hex, dm_unregister_app_restart_info, ...) has no
++# internal CONFIG_HOSTAPD/hostapd-specific logic of its own — it's a plain
++# utility file. But the prebuilt GT-AX6000 hostapd_config_6e.o (linked into
++# rc regardless of RTCONFIG_BRCM_HOSTAPD — see rc/Makefile and
++# 0004-gt-ax6000-hostapd-config-6e-hostapd-decoupling.patch) needs
++# bytes_to_hex/dm_unregister_app_restart_info unconditionally (confirmed via
++# `nm`), so this OBJS addition must not be gated on RTCONFIG_BRCM_HOSTAPD.
+ OBJS += common_utils.o
+-endif
+ 
+ ifeq ($(or $(RTCONFIG_JFFS_NVRAM),$(RTCONFIG_VAR_NVRAM)),y)
+ OBJS += nvpriv.o
+diff --git a/release/src/router/shared/common_utils.c b/release/src/router/shared/common_utils.c
+index 7998567acb..4b47a2946f 100644
+--- a/release/src/router/shared/common_utils.c
++++ b/release/src/router/shared/common_utils.c
+@@ -278,3 +278,30 @@ dm_unregister_app_restart_info(int pid)
+ 		printf("Unable to remove file %s. %s\n", buf, strerror(errno));
+ 	}
+ }
++
++/* wl_ascii_str_to_hex_str() is normally declared/defined in wlif_utils.c
++ * under CONFIG_HOSTAPD, but wlif_utils.c/wlif_utils_ax.c are only compiled
++ * at all when CONFIG_BCMWL5 is "y" (see shared/Makefile) — an older,
++ * non-AX driver generation flag that's off for this HND_ROUTER_AX chip, so
++ * neither file is ever built here regardless of CONFIG_HOSTAPD. The
++ * prebuilt GT-AX6000 hostapd_config_6e.o (linked into rc unconditionally —
++ * see rc/Makefile and 0004-gt-ax6000-hostapd-config-6e-hostapd-decoupling.patch)
++ * needs this symbol anyway (confirmed via `nm`). It's a small, self-contained
++ * ASCII<->hex conversion with no hostapd-specific dependencies, so it's
++ * defined here instead, in a file that's genuinely always compiled — a
++ * verbatim copy of wlif_utils.c's CONFIG_HOSTAPD-gated version. */
++void wl_ascii_str_to_hex_str(char *ascii_str, uint16 ascii_len, char *hex_str, uint16 hex_len)
++{
++	int i = 0;
++
++	if (!ascii_str || !hex_str || !ascii_len || !hex_len) {
++		return;
++	}
++
++	while (ascii_str[i] != '\0' && i < (ascii_len - 1) && (i * 2) < (hex_len - 1)) {
++		snprintf((hex_str + i*2), 3,"%02X", ascii_str[i]);
++		i = i + 1;
++	}
++	hex_str[hex_len - 1] = '\0';
++	return;
++}
+diff --git a/release/src/router/shared/wlif_utils.h b/release/src/router/shared/wlif_utils.h
+index 4c3c33ba6e..5ff8cfe713 100644
+--- a/release/src/router/shared/wlif_utils.h
++++ b/release/src/router/shared/wlif_utils.h
+@@ -160,6 +160,21 @@ extern unsigned char *get_wlmacstr_by_unit(char *unit);
+ 
+ #define WLIF_MAX_BUF			256
+ 
++#ifndef CONFIG_HOSTAPD
++/* wl_ascii_str_to_hex_str() is normally declared/defined only under
++ * CONFIG_HOSTAPD below — but this whole file is only ever compiled when
++ * CONFIG_BCMWL5 is "y" (see shared/Makefile), an older non-AX driver
++ * generation flag that's off for HND_ROUTER_AX chips like GT-AX6000's, so
++ * neither branch of this file is ever built here. The prebuilt GT-AX6000
++ * hostapd_config_6e.o (linked into rc regardless of RTCONFIG_BRCM_HOSTAPD —
++ * see rc/Makefile and 0004-gt-ax6000-hostapd-config-6e-hostapd-decoupling.patch)
++ * needs this symbol unconditionally (confirmed via `nm`); its actual
++ * definition lives in shared/common_utils.c instead, a file that genuinely
++ * is always compiled. This declaration is just kept here too so any other
++ * translation unit that includes this header sees a matching prototype. */
++extern void wl_ascii_str_to_hex_str(char *ascii_str, uint16 ascii_len, char *hex_str, uint16 hex_len);
++#endif
++
+ #ifdef CONFIG_HOSTAPD
+ 
+ // Key mgmt types

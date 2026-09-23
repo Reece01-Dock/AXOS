@@ -1,0 +1,61 @@
+Fix a real upstream gap (not an AXOS feature): get_ASUS_privacy_policy_state()
+is declared in shared/shared.h and called from both aws-iot/src/awsiot.c and
+uploader/src/uploader.c, but has no implementation anywhere in this Merlin
+release's source tree, and no GT-AX6000 prebuilt object provides it either.
+Confirmed via a real build attempt: `make gt-ax6000` fails linking aws-iot
+with "undefined reference to `get_ASUS_privacy_policy_state'" (uploader/
+hadn't been reached yet at that point, but has the identical call and would
+hit the same failure).
+
+Fix: replace both calls with a literal `0` (== the function's presumed
+"not granted" return value), the conservative default for an unimplemented
+privacy-consent check:
+- aws-iot/src/awsiot.c: part of `(ASUS_EULA==1) || (get_ASUS_privacy_policy_state(...)==1)`
+  — falls back to the ASUS_EULA check alone, the other half of the OR.
+- uploader/src/uploader.c: part of an AND chain gating a data-transfer
+  path — treating this specific consent check as not granted keeps that
+  transfer from proceeding on the strength of a check that was never
+  actually implemented, rather than silently skipping it.
+
+`git apply --check`-verified against the pinned tag (3004.388.9), applied on
+top of 0001-0010. Not yet verified past that point in a completed build —
+see docs/build-environment.md and docs/ROADMAP.md.
+
+diff --git a/release/src/router/aws-iot/src/awsiot.c b/release/src/router/aws-iot/src/awsiot.c
+index 18824a3f86..a2b350e214 100644
+--- a/release/src/router/aws-iot/src/awsiot.c
++++ b/release/src/router/aws-iot/src/awsiot.c
+@@ -1973,7 +1973,12 @@ void init_basic_data()
+         snprintf(awsiot_endpoint, sizeof(awsiot_endpoint), "%s", nvram_safe_get("awsiotendpoint"));
+         snprintf(awsiot_clientid, sizeof(awsiot_clientid), "%s", nvram_safe_get("awsiotclientid"));
+ 
+-        if( (strlen(awsiot_endpoint) > 2) &&  (strlen(awsiot_clientid) > 2) && ((nvram_get_int("ASUS_EULA") == 1) || (get_ASUS_privacy_policy_state(ASUS_PP_ACCOUNT_BINDING) == 1)) ) {
++        /* get_ASUS_privacy_policy_state() has no implementation anywhere in
++         * this Merlin release's source tree, nor in any GT-AX6000 prebuilt
++         * object — a genuine upstream gap. Falls back to the ASUS_EULA
++         * check alone (the other half of this OR), same as if this specific
++         * privacy-policy state were never granted. */
++        if( (strlen(awsiot_endpoint) > 2) &&  (strlen(awsiot_clientid) > 2) && ((nvram_get_int("ASUS_EULA") == 1) || (0 == 1)) ) {
+             LogInfo( ( "Get awsiot_endpoint -> %s, awsiot_clientid -> %s", awsiot_endpoint, awsiot_clientid) );
+             Cdbg(APP_DBG, "Get awsiot_endpoint -> %s, awsiot_clientid -> %s", awsiot_endpoint, awsiot_clientid);
+             break;
+diff --git a/release/src/router/uploader/src/uploader.c b/release/src/router/uploader/src/uploader.c
+index 77e1476872..48576a4840 100644
+--- a/release/src/router/uploader/src/uploader.c
++++ b/release/src/router/uploader/src/uploader.c
+@@ -90,8 +90,13 @@ void init_basic_data()
+         int account_bound = 0;
+ #endif
+         
+-        if((ntp_ready == 1) && (link_internet == 2) && 
+-            get_ASUS_privacy_policy_state(ASUS_PP_CONFIG_TRANSFER)==1 &&
++        /* get_ASUS_privacy_policy_state() has no implementation anywhere in
++         * this Merlin release's source tree, nor in any GT-AX6000 prebuilt
++         * object — a genuine upstream gap. Treated as "not granted" (0),
++         * the conservative default for a privacy-consent check whose real
++         * implementation is unavailable. */
++        if((ntp_ready == 1) && (link_internet == 2) &&
++            0==1 &&
+             account_bound) {
+             Cdbg(APP_DBG, "ntp_ready -> %d, link_internet -> %d, oauth_auth_status -> %d", ntp_ready, link_internet, oauth_auth_status);
+             break;

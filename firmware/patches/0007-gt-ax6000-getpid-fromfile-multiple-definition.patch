@@ -1,0 +1,60 @@
+Fix a real toolchain-compatibility bug (not an AXOS feature, and unrelated to
+RTCONFIG_BRCM_HOSTAPD): rc/rc.c defines a plain, global getPid_fromFile(),
+and the prebuilt rc/prebuild/GT-AX6000/frs_service.o — unconditionally
+linked into `rc` (see rc/Makefile: unguarded `OBJS += frs_service.o` and an
+unconditional `ifneq ($(wildcard ./prebuild/frs_service.o),)` copy-override
+rule) — already defines its own global getPid_fromFile() too. Two
+non-static definitions of the same function is a hard "multiple definition"
+link error under this cross-toolchain (GCC 9.2/binutils 2.32); this would
+happen for ANY GT-AX6000 build of this Merlin release with this toolchain,
+regardless of hostapd or any of the other flags touched by earlier patches
+in this series — it just happens to be the next thing this build reaches.
+
+Confirmed via a real build attempt: `make gt-ax6000` fails linking `rc` with
+"multiple definition of `getPid_fromFile'; rc.o:.../rc.c:95: first defined
+here" against frs_service.o's copy.
+
+Fix: make rc.c's own copy `static`. Confirmed via `grep` that nothing outside
+rc.c calls getPid_fromFile() (rc.h's extern declaration was otherwise
+unused), so giving it internal linkage doesn't change behavior anywhere —
+it just stops rc.c's copy from colliding with the prebuilt binary's. The
+prebuilt frs_service.o itself is untouched.
+
+`git apply --check`-verified against the pinned tag (3004.388.9), applied on
+top of 0001-0006. Not yet verified past that point in a completed build —
+see docs/build-environment.md and docs/ROADMAP.md.
+
+diff --git a/release/src/router/rc/rc.c b/release/src/router/rc/rc.c
+index afdc21d58e..c1358a7531 100644
+--- a/release/src/router/rc/rc.c
++++ b/release/src/router/rc/rc.c
+@@ -91,7 +91,9 @@ double wl_get_txpwr_target_max(char *name);
+ double get_wifi_maxpower(int target_unit);
+ #endif
+ 
+-int getPid_fromFile(char *file_name)
++/* static: see the comment above rc.h's (removed) extern declaration of this
++ * function — the prebuilt frs_service.o already provides a global copy. */
++static int getPid_fromFile(char *file_name)
+ {
+ 	FILE *fp;
+ 	char *pidfile = file_name;
+diff --git a/release/src/router/rc/rc.h b/release/src/router/rc/rc.h
+index 655d5a9f72..92404efd6b 100644
+--- a/release/src/router/rc/rc.h
++++ b/release/src/router/rc/rc.h
+@@ -2626,7 +2626,13 @@ extern void stop_dsl_autodet(void);
+ extern void stop_dsl_diag(void);
+ extern int start_dsl_diag(void);
+ #endif
+-extern int getPid_fromFile(char *file_name);
++/* Not declared extern here: rc/rc.c's own copy of getPid_fromFile() is
++ * `static` (see rc.c) since the prebuilt rc/prebuild/GT-AX6000/frs_service.o
++ * — unconditionally linked into rc, see rc/Makefile — already defines a
++ * global getPid_fromFile() of its own. Two non-static definitions of the
++ * same symbol is a hard "multiple definition" link error under this
++ * toolchain; only rc.c calls its own copy, so giving it internal linkage
++ * avoids the clash without touching the prebuilt binary. */
+ #ifdef RTCONFIG_FRS_LIVE_UPDATE
+ extern int firmware_check_update_main(int argc, char *argv[]);
+ #endif

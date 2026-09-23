@@ -1,0 +1,169 @@
+Fix real upstream gaps (not AXOS features): eight functions are called from
+rc/rc.c, rc/init.c, rc/wan.c, and rc/sysdeps/init-broadcom.c with no
+implementation anywhere in this Merlin release's source tree, and no
+GT-AX6000 prebuilt object provides them either (checked every
+rc/prebuild/GT-AX6000/*.o with `nm`). Each was confirmed via a real build
+attempt: `make gt-ax6000` fails linking `rc` with "undefined reference to"
+each of these symbols.
+
+- chk_acscli2_cmds(), avbl_reset_exclvalid() (rc.c, rctest_main): debug-only
+  handlers for the manual "rc chk_acsc"/"rc acsc" CLI test commands, not
+  called from any boot/runtime path. Guarded out (the debug commands become
+  no-ops); nothing else depends on them.
+
+- chk_acscli2_cmds() (sysdeps/init-broadcom.c, init_syspara): a second,
+  separate call site for the same missing function, under a different guard
+  (RTCONFIG_AMAS alone, no BCMWL6 check) — easy to miss since it's a
+  different file. Guarded out the same way.
+
+- nordvpn_main() (rc.c, applets[] table): only wires up the "/sbin/nordvpn"
+  CLI convenience symlink to `rc`. Actual NordVPN client configuration goes
+  through shared/vpn_utils.c and rc/vpnc_fusion.c's VPNC_PROTO_NORDVPN
+  dispatch, neither of which needs this applet entry. Guarded out.
+
+- noasusddns() (init.c, init_nvram2): declared `extern` only under
+  RTCONFIG_TCODE but called completely unconditionally. RTCONFIG_TCODE is
+  genuinely on for this router, so this is not merely a guard mismatch — no
+  implementation exists at all, TCODE on or off. Always take the
+  WWW.ASUS.COM.CN-only branch of the original OR condition.
+
+- check_wlx_nband_type() (init.c, WLAN startup path): no declaration at all
+  anywhere, called completely unguarded. Guarded out with `#if 0` — no
+  existing flag in this codebase corresponds to whatever this was meant to
+  gate.
+
+- get_jpix_map(), get_ocn_map() (wan.c, wan6_up, RTCONFIG_SOFTWIRE46's
+  WAN_V6PLUS/WAN_V6OPTION/WAN_OCNVC MAP-E cases): only reachable when the
+  ISP's "dhcpenble_x" NVRAM flag requests DHCP-auto-fetched Japan-ISP
+  (JPIX/OCN) map rules. Guarded out; falls through to the static map-e path
+  below (the same path taken when dhcpenble_x is unset), rather than the
+  auto-fetch this router cannot actually provide.
+
+`git apply --check`-verified against the pinned tag (3004.388.9), applied on
+top of 0001-0004. Not yet verified past that point in a completed build —
+see docs/build-environment.md and docs/ROADMAP.md.
+
+diff --git a/release/src/router/rc/init.c b/release/src/router/rc/init.c
+index df91e3d3e2..dba92a14c6 100644
+--- a/release/src/router/rc/init.c
++++ b/release/src/router/rc/init.c
+@@ -19230,7 +19230,14 @@ int init_nvram2(void)
+ #endif
+ 
+ 	/* 2024/12/25 stop asuscomm.cn service. reset values of ddns_enable_x and ddns_hostname_x if WWW.ASUS.COM.CN is used. */
+-	if(!strcmp(nvram_safe_get("ddns_server_x"), "WWW.ASUS.COM.CN") || ( noasusddns() && !strcmp(nvram_safe_get("ddns_server_x"), "WWW.ASUS.COM"))){
++	/* noasusddns() is declared extern only under RTCONFIG_TCODE (above,
++	 * line ~123) but was called here unconditionally. Confirmed via a real
++	 * build attempt (RTCONFIG_TCODE genuinely on for this router): no
++	 * implementation exists anywhere in this Merlin release's source tree,
++	 * nor in any GT-AX6000 prebuilt object, regardless of RTCONFIG_TCODE —
++	 * a genuine upstream gap, not just a guard mismatch. Always take the
++	 * WWW.ASUS.COM.CN-only branch. */
++	if(!strcmp(nvram_safe_get("ddns_server_x"), "WWW.ASUS.COM.CN")){
+ 		nvram_set("ddns_enable_x", "0");
+ 		nvram_set("ddns_hostname_x", "");
+ 		nvram_set("ddns_server_x", "");
+@@ -21444,7 +21451,15 @@ logmessage("ATE", "boot/continue fail= %d/%d\n", nvram_get_int("Ate_boot_fail"),
+ #endif
+ 			}
+ 
++			/* check_wlx_nband_type() has no declaration or implementation
++			 * anywhere in this Merlin release's source tree, nor in any
++			 * GT-AX6000 prebuilt object — a genuine upstream gap, called
++			 * here completely unguarded. Guarded out rather than stubbed
++			 * since its intended behavior (band-type bookkeeping) isn't
++			 * documented anywhere else in this checkout to fake safely. */
++#if 0
+ 			check_wlx_nband_type();
++#endif
+ #ifdef RTCONFIG_TR069
+ 			tr_switch_wan_line(WAN_UNIT_FIRST);
+ #endif
+diff --git a/release/src/router/rc/rc.c b/release/src/router/rc/rc.c
+index 79fb36a4f5..afdc21d58e 100644
+--- a/release/src/router/rc/rc.c
++++ b/release/src/router/rc/rc.c
+@@ -850,7 +850,15 @@ static int rctest_main(int argc, char *argv[])
+ 		fflush(stdout);
+ 	}
+ #endif
+-#if defined(RTCONFIG_AMAS) && defined(RTCONFIG_BCMWL6)
++#if defined(RTCONFIG_AMAS) && defined(RTCONFIG_BCMWL6) && 0
++	/* chk_acscli2_cmds()/avbl_reset_exclvalid() are debug-only entry points
++	 * for the manual "rc chk_acsc"/"rc acsc" CLI test commands (not called
++	 * from any boot/runtime path). Neither has an implementation anywhere
++	 * in this Merlin release's source tree, nor in any GT-AX6000 prebuilt
++	 * object (confirmed via `nm` across every rc/prebuild/GT-AX6000/*.o) —
++	 * a genuine upstream gap. Guarded out rather than stubbed since these
++	 * are unused debug commands, not functionality this router needs.
++	 */
+ 	else if (strcmp(argv[1], "chk_acsc")==0) {
+         	int ret = 0;
+ 
+@@ -2213,7 +2221,13 @@ static const applets_t applets[] = {
+ #ifdef RTCONFIG_HMA
+ 	{ "hmavpn",				hmavpn_main					},
+ #endif
+-#ifdef RTCONFIG_NORDVPN
++#if defined(RTCONFIG_NORDVPN) && 0
++	/* nordvpn_main() has no implementation anywhere in this Merlin
++	 * release's source tree or any GT-AX6000 prebuilt object — a genuine
++	 * upstream gap. This only drops the "/sbin/nordvpn" applet-table CLI
++	 * convenience symlink; NordVPN client configuration itself goes
++	 * through shared/vpn_utils.c and rc/vpnc_fusion.c's
++	 * VPNC_PROTO_NORDVPN dispatch, which is unaffected. */
+ 	{ "nordvpn",			nordvpn_main				},
+ #endif
+ #endif
+diff --git a/release/src/router/rc/sysdeps/init-broadcom.c b/release/src/router/rc/sysdeps/init-broadcom.c
+index 8ef46b721b..2044c22554 100644
+--- a/release/src/router/rc/sysdeps/init-broadcom.c
++++ b/release/src/router/rc/sysdeps/init-broadcom.c
+@@ -4949,7 +4949,10 @@ void init_syspara(void)
+ 		nvram_set("wps_device_pin", wps_gen_pin(devPwd, sizeof(devPwd)) ? devPwd : "12345670");
+ 	} else
+ 		nvram_set("wps_device_pin", value);
+-#ifdef RTCONFIG_AMAS
++#if defined(RTCONFIG_AMAS) && 0
++	/* chk_acscli2_cmds(): same genuine upstream gap as in rc/rc.c's
++	 * rctest_main() — no implementation anywhere in this Merlin release's
++	 * source tree, nor in any GT-AX6000 prebuilt object. Guarded out. */
+ 	int ret = 0;
+ 
+ 	ret = chk_acscli2_cmds("acs_restart");
+diff --git a/release/src/router/rc/wan.c b/release/src/router/rc/wan.c
+index 79c94f3f48..43875cdb28 100644
+--- a/release/src/router/rc/wan.c
++++ b/release/src/router/rc/wan.c
+@@ -3060,20 +3060,31 @@ void wan6_up(const char *pwan_ifname)
+ 		case WAN_V6PLUS:
+ 		case WAN_V6OPTION:
+ 			draft = 1;
++			/* get_jpix_map() has no declaration or implementation anywhere
++			 * in this Merlin release's source tree, nor in any GT-AX6000
++			 * prebuilt object — a genuine upstream gap. Guarded out; falls
++			 * through to the static map-e path below (same as when
++			 * dhcpenble_x is unset) rather than the DHCP-auto-fetched
++			 * JPIX map this router cannot actually provide. */
++#if 0
+ 			if (nvram_get_int(strcat_r(prefix, "dhcpenble_x", tmp))) {
+ 				rules = get_jpix_map(wan_unit, NULL, NULL, 0, &rsp_code);
+ 				goto s46_mapcalc;
+ 			}
++#endif
+ 			type = "map-e";
+ 			prefix4len = nvram_get_int(strcat_r(prefix, "s46_prefix4len_x", tmp));
+ 			ealen = nvram_get_int(strcat_r(prefix, "s46_ealen_x", tmp));
+ 			goto s46_maprules;
+ 		case WAN_OCNVC:
+ 			draft = 1;
++			/* get_ocn_map(): same genuine gap as get_jpix_map() above. */
++#if 0
+ 			if (nvram_get_int(strcat_r(prefix, "dhcpenble_x", tmp))) {
+ 				rules = get_ocn_map(wan_unit, nvram_safe_get("ipv6_ra_addr"), nvram_get_int("ipv6_ra_length"), &rsp_code);
+ 				goto s46_mapcalc;
+ 			}
++#endif
+ 			type = "map-e";
+ 			prefix4len = nvram_get_int(strcat_r(prefix, "s46_prefix4len_x", tmp));
+ 			ealen = nvram_get_int(strcat_r(prefix, "s46_ealen_x", tmp));

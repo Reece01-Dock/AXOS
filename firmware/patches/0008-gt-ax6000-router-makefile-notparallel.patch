@@ -1,0 +1,67 @@
+Fix a real upstream parallel-build-safety bug (not an AXOS feature, and
+unrelated to any of the RTCONFIG_ work in earlier patches): release/src/router/Makefile's
+`all: clean-build kernel_header version fsbuild $(obj-y)` lists clean-build
+(which does `rm -rf $(BCM_FSBUILD_DIR)` among other staging-directory wipes)
+as a co-equal prerequisite of "all" alongside fsbuild and every $(obj-y)
+component target — several of which (e.g. protect_srv/lib) themselves
+populate that exact same staging tree as part of their own install step.
+GNU Make is free to build sibling prerequisites of one target in parallel
+under -j>1, with no ordering guarantee between them unless the Makefile
+says otherwise. This Makefile already works around the identical shape of
+problem for the older (non-HND_ROUTER) kernel build path a bit further down
+(see the LINUXDIR rules, which prepend a `.NOTPARALLEL:` line before
+invoking that kernel build) — this fix applies the same, established
+technique to the "all" target used for GT-AX6000 (HND_ROUTER=y).
+
+Confirmed via two separate real -j4 build attempts, failing identically
+both times: clean-build's `rm -rf` and protect_srv/lib's
+`mkdir -p .../fs.build/public/...` raced, failing with "rm: cannot remove
+'.../fs.build/public': Directory not empty". This did not reproduce at -j1
+(no parallelism to race) — it is inherently a timing-dependent race, not
+guaranteed to reproduce at every parallel -j value, though it reproduced
+reliably (twice in a row) at -j4 on this host.
+
+Fix: add a bare `.NOTPARALLEL:` directive to release/src/router/Makefile,
+right before the `all:` target definitions. This is scoped to just this
+Makefile's own recursive `make -C router all` invocation (GNU Make's
+`.NOTPARALLEL` only affects the make process that reads the makefile
+containing it) — it does not affect parallelism in the kernel build (a
+separate make invocation with its own MAKEFLAGS) or within each $(obj-y)
+component's own recursive sub-make (e.g. rc/Makefile compiling its many
+.o files still parallelizes normally, since that is a distinct child make
+process reading a different Makefile). Only the top-level sequencing of
+clean-build/kernel_header/version/fsbuild/$(obj-y) against each other is
+serialized — exactly the ordering this race needed.
+
+`git apply --check`-verified against the pinned tag (3004.388.9), applied on
+top of 0001-0007. Not yet verified past that point in a completed build —
+see docs/build-environment.md and docs/ROADMAP.md.
+
+diff --git a/release/src/router/Makefile b/release/src/router/Makefile
+index fe6950ea62..080bf0066f 100644
+--- a/release/src/router/Makefile
++++ b/release/src/router/Makefile
+@@ -1850,6 +1850,23 @@ LINUX_ARCH_ASM_INCL_DIR = $(if ($KPATH_3X),$(LINUXDIR)/arch/mips/include/asm,$(L
+ # Basic rules
+ #
+ 
++# clean-build (rm -rf $(BCM_FSBUILD_DIR) among other staging dirs) is listed
++# as a co-equal prerequisite of "all" alongside fsbuild and every $(obj-y)
++# component — several of which (e.g. protect_srv/lib) themselves populate
++# that same staging tree as part of their own install step. GNU Make is free
++# to build sibling prerequisites of one target in parallel under -j>1, with
++# no ordering between them; this Makefile already uses the same .NOTPARALLEL
++# workaround for the older kernel build path below (see LINUXDIR rules) for
++# an analogous reason. Confirmed via a real -j4 build attempt: clean-build's
++# `rm -rf` and protect_srv/lib's `mkdir -p .../fs.build/public/...` raced,
++# failing with "rm: cannot remove '.../fs.build/public': Directory not
++# empty". Scoped to just this Makefile's own recursive `make -C router all`
++# invocation — it does not affect parallelism in the kernel build (a
++# separate make invocation) or within each $(obj-y) component's own
++# sub-make (e.g. rc/Makefile compiling its many .o files still parallelizes
++# normally).
++.NOTPARALLEL:
++
+ ifeq ($(HND_ROUTER),y)
+ all: clean-build kernel_header version fsbuild $(obj-y)
+ else ifeq ($(RTCONFIG_ARM),y)

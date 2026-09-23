@@ -1,0 +1,55 @@
+Fix a real upstream per-model gap (not an AXOS feature, and the same
+category the original 0a1cab5/3897483 prebuild audit was checking for —
+this one slipped through it): router/Makefile's `obj-y += asd2.1` builds
+the asd2.1 security daemon unconditionally for every model. asd2.1/Makefile's
+own build step already tolerates a model with no
+asd2.1/prebuild/$(BUILD_NAME)/{asd,libasd.so} — its prebuild copy uses a
+leading "-" to ignore a missing file. No such prebuild exists for GT-AX6000
+(confirmed: asd2.1/prebuild/ only has entries for GT-AXE11000, RT-AX68U,
+RT-AX88U, RT-AX58U, RT-AX86U, and GT-AX11000). The original prebuild audit
+(see build.sh's comments) noted this exact leniency and concluded asd2.1 was
+"not a risk" — but that only covers asd2.1's own build step; the separate
+`asd2.1-install` target in router/Makefile does not have the same leniency.
+
+Confirmed via a real build attempt: `make gt-ax6000` fails with "install:
+cannot stat 'asd2.1/asd': No such file or directory" once GT-AX6000's
+absent prebuild leaves nothing for asd2.1's build step to produce either.
+
+Fix: add the same leading "-" (ignore-errors) to the two `install -D` lines
+and the two (already RTCONFIG_DEBUG-conditional) strip lines in
+`asd2.1-install`, matching the leniency this codebase already established
+for this exact scenario in asd2.1/Makefile itself.
+
+`git apply --check`-verified against the pinned tag (3004.388.9), applied on
+top of 0001-0011. Not yet verified past that point in a completed build —
+see docs/build-environment.md and docs/ROADMAP.md.
+
+diff --git a/release/src/router/Makefile b/release/src/router/Makefile
+index fe6950ea62..825e60d787 100644
+--- a/release/src/router/Makefile
++++ b/release/src/router/Makefile
+@@ -8615,11 +8640,20 @@ asd-clean:
+ asd2.1: shared $(if $(BCM_502L07P2),ethctl_lib) nvram$(BCMEX)$(EX7) curl openssl libasc
+ 	$(MAKE) -C $@
+ 
++# asd2.1/Makefile's own build step already tolerates a model with no
++# asd2.1/prebuild/$(BUILD_NAME)/{asd,libasd.so} (its prebuild copy uses a
++# leading "-" to ignore a missing file — see asd2.1/Makefile) — no such
++# prebuild exists for GT-AX6000. This install step did not have the same
++# leniency: confirmed via a real build attempt, "install: cannot stat
++# 'asd2.1/asd': No such file or directory" once GT-AX6000's absent
++# prebuild left nothing for asd2.1's own build step to produce either.
++# Matched the leniency this codebase already established for this exact
++# per-model gap.
+ asd2.1-install:
+-	install -D asd2.1/asd $(INSTALLDIR)/asd2.1/usr/bin/asd
+-	install -D asd2.1/libasd.so $(INSTALLDIR)/asd2.1/usr/lib/libasd.so
+-	$(if $(RTCONFIG_DEBUG),,$(STRIP) $(INSTALLDIR)/asd2.1/usr/bin/asd)
+-	$(if $(RTCONFIG_DEBUG),,$(STRIP) $(INSTALLDIR)/asd2.1/usr/lib/libasd.so)
++	-install -D asd2.1/asd $(INSTALLDIR)/asd2.1/usr/bin/asd
++	-install -D asd2.1/libasd.so $(INSTALLDIR)/asd2.1/usr/lib/libasd.so
++	$(if $(RTCONFIG_DEBUG),,-$(STRIP) $(INSTALLDIR)/asd2.1/usr/bin/asd)
++	$(if $(RTCONFIG_DEBUG),,-$(STRIP) $(INSTALLDIR)/asd2.1/usr/lib/libasd.so)
+ 
+ asd2.1-clean:
+ 	$(MAKE) -C asd2.1 clean

@@ -30,9 +30,16 @@ access to so far includes one. What follows is exactly what *was* checked —
 real verification against the actual upstream source, not speculation —
 and exactly where it stops.
 
-- [ ] 1. Build Asuswrt-Merlin from source for GT-AX6000 *(scripted:
-      `firmware/`; **partially verified** — see below)*
-- [ ] 2. Produce a firmware image (`.w` / `.pkgtb`) — blocked on disk (see below)
+- [s] 1. Build Asuswrt-Merlin from source for GT-AX6000 — a full `make
+      gt-ax6000` completed with exit code 0 in this development sandbox
+      (see below for the real disk/patch work that got it there). Not
+      `[x]`: this is a sandbox build, not one run on independent hardware.
+- [s] 2. Produce a firmware image (`.w` / `.pkgtb`) — real output exists:
+      `GT-AX6000_3004_388.9_0_nand_squashfs.pkgtb`, 63,261,708 bytes,
+      sha256 `8bcae611633e1fafcd2fdf9d3356ed92ffc383c7a170c749552865fcb4bb00b3`
+      (see the manifest alongside it in `firmware/out/` for the exact
+      refs). Not `[x]`: producing bytes isn't the same as those bytes
+      being a correct, flashable image — that's what step 3 checks.
 - [ ] 3. Flash it via the stock ASUS web UI — blocked on physical hardware
 - [ ] 4. Router boots — blocked on physical hardware
 - [ ] 5. 1GbE Ethernet works — blocked on physical hardware
@@ -45,12 +52,12 @@ and exactly where it stops.
        **before** flashing anything custom; see `docs/flashing-and-recovery.md`)
        — blocked on physical hardware
 - [ ] 12. Create and store a settings + JFFS backup — blocked on physical hardware
-- [ ] 13. Make one harmless, visible source modification — **patch written and
-      verified**: `firmware/patches/0001-axos-login-title-marker.patch`
-      (adds " (AXOS)" to the web UI login page's browser-tab title),
-      generated against and `git apply --check`-confirmed on an actual
-      checkout of the pinned tag `3004.388.9`. Not yet built into an image
-      or flashed — see step 2.
+- [s] 13. Make one harmless, visible source modification — **built into the
+      real image**, not just written: `firmware/patches/0001-axos-login-title-marker.patch`
+      (adds " (AXOS)" to the web UI login page's browser-tab title) is one
+      of the 13 patches baked into the step-2 image (`apply_patches: true`
+      in its manifest). Not `[x]`: nobody has loaded that web UI on a real
+      router yet to see the title — see step 16.
 - [ ] 14. Rebuild — blocked on step 2
 - [ ] 15. Flash again — blocked on physical hardware
 - [ ] 16. Verify the modification is visible on the router — blocked on physical hardware
@@ -348,13 +355,71 @@ model — `APPLY_PATCHES=1 ./build.sh` is now required, not optional (see
 could run a full build.
 
 Everything requiring physical hardware is separately blocked as before.
-The concrete next step is to run
-`firmware/setup-sources.sh && APPLY_PATCHES=1 ./firmware/build.sh` on a
-**real machine outside this sandbox** (a Linux box or VM with normal,
-unrestricted internet access — the disk-space math above still applies:
-~20GB for source, ~60GB recommended overall) — the build-target fix above
-should make the build itself succeed once it can actually pull its base
-image, then work through steps 3–16 with the physical router.
+
+### First complete build (this sandbox, disk expanded to 57GB)
+
+The sandbox's disk was expanded (`lvextend` + `resize2fs` on the host,
+done by the user — not something this session's own permissions can do)
+from 29GB to 57GB, and Docker Hub pulls that were blocked in an earlier
+session's environment worked fine in this one (`docker pull ubuntu:20.04`
+succeeded directly) — neither of the two blockers recorded above turned
+out to still apply here. That unblocked a real, full build attempt
+in-sandbox, which is how everything below was found and fixed.
+
+Ten more real, build-attempt-confirmed bugs were found and fixed the same
+way as `0002` — patches `0003` through `0012` (see each patch file's own
+header for its specific root cause; shapes matched what the `0002`/`prebuild`
+audit above already predicted: more `RTCONFIG_*`-gated `OBJS +=` gaps,
+missing symbol guards, a `getpid`/`fromfile` multiple-definition clash, a
+real parallel-build race fixed with `.NOTPARALLEL` on `router/Makefile`
+itself once `-j1` alone wasn't enough headroom on a constrained host, and
+the `asd2.1-install` leniency gap predicted but not yet hit before).
+
+That got the build past userspace linking and into `sqlite`, where it hit
+an eleventh, differently-shaped bug: `sqlite/`'s `stamp-h1` recipe is the
+*only* place in this tree that runs `autoreconf -i -f` at build time
+instead of shipping pre-generated autotools output the way every other
+autotools subdir here does (`flac`, `libogg`, `strace-4.5.20`, etc. all
+carry a tracked `missing`/`aclocal.m4`/`configure`). Confirmed
+identically on two separate real build attempts: the recursive
+`make -C sqlite all` fails immediately with `./missing: No such file or
+directory` trying to rebuild `aclocal.m4`, even though `autoreconf`
+had just run successfully moments earlier in the same build and even
+produced a working `sqlite3` binary — its auxiliary helper files don't
+survive to when the submake re-checks its own Makefile's freshness.
+Verified in isolation that `autoreconf -i -f -v` against the pinned
+`sqlite/configure.ac`/`Makefile.am` reliably works — the tool isn't
+broken, something about the real build environment's recursive submake
+is. Rather than keep chasing that mechanism, **`firmware/patches/0013-gt-ax6000-sqlite-pregenerated-autotools.patch`**
+converts `sqlite` to the same already-proven pattern every other subdir
+uses: ships `configure`/`aclocal.m4`/`missing`/`install-sh`/`Makefile.in`/
+`compile`/`depcomp`/`config.guess`/`config.sub` as tracked files
+(generated once via this project's own Docker image/toolchain) and drops
+the `autoreconf -i -f` call from the recipe.
+
+With all 13 patches applied, a full `APPLY_PATCHES=1 ./firmware/build.sh`
+run from a pristine checkout **completed successfully — exit code 0**:
+past `sqlite`, through the rest of userspace, through the full 4.19
+kernel build, through `strongSwan`/`ncurses`/bootloader image generation,
+producing a real signed FIT image and
+`firmware/out/GT-AX6000_3004_388.9_0_nand_squashfs.pkgtb` (63,261,708
+bytes, sha256 `8bcae611633e1fafcd2fdf9d3356ed92ffc383c7a170c749552865fcb4bb00b3`,
+manifest alongside it with `apply_patches: true`). This is the first time
+anything in this project has produced a real firmware image.
+
+Two things surfaced along the way that are **not** believed to be real
+problems, recorded so they aren't re-investigated from scratch later if
+seen again: (1) a `udb/tmcfg_udb.h: No such file or directory` compiling
+`bwdpi_source`'s TrendMicro sample code, which fires during the
+pre-build `clean` pass and does not stop or reappear in the real build —
+never confirmed *why* it's non-fatal, just confirmed twice that it is;
+(2) dozens of `pjproject` sample-binary link failures (`Error 127
+(ignored)`) — explicitly marked `(ignored)` by `make` itself, i.e. the
+vendor's own Makefile already expects and tolerates these.
+
+**Not done, and still genuinely blocked on physical hardware**: steps
+3–12 and 14–16 exactly as stated above. The image now exists to flash —
+see `docs/flashing-and-recovery.md` before doing that on a real router.
 
 ## Milestone 2 — First AXOS control service (`axosd`) + MCP
 

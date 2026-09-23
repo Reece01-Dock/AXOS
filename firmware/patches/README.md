@@ -79,6 +79,35 @@ marker is. Not yet verified past `git apply --check` (no environment that
 generated this patch could complete a full build — see
 `docs/build-environment.md` and `docs/ROADMAP.md`).
 
+## `0003`-`0012`: more of the same
+
+Ten more real, build-attempt-confirmed upstream bugs, found and fixed the
+same way as `0002` — see each patch's own header for its specific root
+cause. Required together with `0002` for `make gt-ax6000` to get past
+userspace linking.
+
+## `0013`: sqlite's missing autotools output
+
+`0013-gt-ax6000-sqlite-pregenerated-autotools.patch` fixes a different
+*kind* of bug from the others: `sqlite/` is the only autotools subdir in
+this tree that tries to run `autoreconf -i -f` at build time instead of
+shipping pre-generated output (`missing`, `aclocal.m4`, `configure`,
+etc.) the way every other one does (`flac`, `libogg`, `strace-4.5.20`,
+...). Confirmed via two real build attempts that the recursive
+`make -C sqlite all` loses those auxiliary files moments after
+`autoreconf` successfully creates them, failing with `./missing: No such
+file or directory`. Rather than keep chasing why, this patch brings
+`sqlite` in line with the rest of the tree: ships the generated output as
+tracked files (produced once via this project's own Docker
+image/toolchain) and drops the `autoreconf -i -f` call.
+
+**This is the patch that got a build all the way through** — with
+`0001`-`0013` all applied, `APPLY_PATCHES=1 ./build.sh` completed with
+exit code 0 and produced a real, signed
+`firmware/out/GT-AX6000_3004_388.9_0_nand_squashfs.pkgtb`. See
+`docs/ROADMAP.md`'s Milestone 1 section for the full story and the
+image's hash/manifest.
+
 ## Later patches (Milestone 2+)
 
 - Install hook for `axosd` (a `services-start` addition, or an `/etc/init.d`

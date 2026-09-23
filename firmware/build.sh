@@ -15,27 +15,17 @@ OUT_DIR="${OUT_DIR:-$HERE/out}"
 IMAGE_TAG="${IMAGE_TAG:-axos-merlin-build}"
 APPLY_PATCHES="${APPLY_PATCHES:-0}"
 CCACHE_DIR_HOST="${CCACHE_DIR_HOST:-$HERE/.ccache}"
-# Conservative CPU/RAM-aware default. Confirmed in the real source: the
-# top-level Makefile's device-name rules (release/src-rt/Makefile, symlinked
-# in as this build dir's Makefile) all recurse via a plain `$(MAKE) bin`
-# (grep shows no `+$(MAKE)` anywhere in this file) — GNU Make does still
-# auto-detect a textual `$(MAKE)` in a recipe as recursive and normally
-# propagates the jobserver to it without needing a leading `+`, but this
-# codebase's *own* nested recursion (make.common includes, per-component
-# sub-Makefiles, the kernel build's own internal `-j 9` at line 1226-1227
-# hardcoding its own parallelism independent of ours) hasn't been fully
-# audited stage by stage, so exact jobserver-sharing behavior throughout
-# the whole tree isn't something this session verified empirically. Given
-# that uncertainty plus memory-heavy individual compiles (cc1 on the m32
-# host-tool builds especially), default to min(nproc, 4) rather than
-# nproc — override explicitly (BUILD_JOBS=N) if your box's RAM can take
-# more; see docs/build-environment.md "Parallelism".
-if command -v nproc >/dev/null 2>&1; then
-  _nproc="$(nproc)"
-else
-  _nproc=4
-fi
-BUILD_JOBS="${BUILD_JOBS:-$([ "$_nproc" -lt 4 ] && echo "$_nproc" || echo 4)}"
+# Real build evidence (firmware/patches/0008-gt-ax6000-router-makefile-notparallel.patch,
+# docs/incremental-builds.md) found two vendor parallel-build races in this
+# tree under -j>1: release/src/router/Makefile's clean-build vs. fsbuild/
+# $(obj-y) (fixed by 0008's .NOTPARALLEL) and router-sysdep/wlan/scripts
+# needing nvramUpdate from the sibling nvram/ target before it's built
+# ("No rule to make target 'nvramUpdate'", not yet patched). This vendor
+# tree was evidently never validated under -j>1 in general. Default to
+# strictly serial (BUILD_JOBS=1) since that's what has actually completed
+# an end-to-end build; override explicitly (BUILD_JOBS=N) only once you've
+# either patched the remaining race yourself or are prepared to hit it.
+BUILD_JOBS="${BUILD_JOBS:-1}"
 
 if [ ! -d "$MERLIN_SRC" ] || [ ! -d "$TOOLCHAINS_SRC" ]; then
   echo "error: sources not found under $SRC_DIR — run ./setup-sources.sh first" >&2
@@ -72,7 +62,7 @@ BUILD_SUBDIR="release/src-rt-5.04axhnd.675x"
 
 mkdir -p "$CCACHE_DIR_HOST"
 
-echo "==> Running build inside container (this can take 45-90+ minutes)"
+echo "==> Running build inside container (this can take 45-90+ minutes, longer still single-threaded)"
 docker run --rm \
   -v "$MERLIN_SRC":/build/asuswrt-merlin.ng \
   -v "$TOOLCHAINS_SRC":/opt/am-toolchains \

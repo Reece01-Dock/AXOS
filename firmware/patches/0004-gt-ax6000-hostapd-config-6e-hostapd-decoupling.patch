@@ -1,0 +1,59 @@
+Fix a real upstream build bug (not an AXOS feature): release/src/router/rc/services.c's
+apply_config_to_driver() / apply_config_to_driver_wlc() are unconditional core
+WLAN-config-apply functions (not gated by RTCONFIG_BRCM_HOSTAPD) that live
+inside the prebuilt rc/prebuild/GT-AX6000/broadcom.o — which rc/Makefile
+links in unconditionally (see rc/Makefile's `broadcom.o:` prebuild-override
+rule, itself unconditional). Confirmed via `nm` on that prebuilt object:
+apply_config_to_driver() needs (references as undefined) two symbols,
+wpa_supp_get_config_filename and wpa_supp_create_config_file. Those two are
+only DEFINED in rc/prebuild/GT-AX6000/hostapd_config_6e.o (also confirmed via
+`nm` — every other GT-AX6000 prebuilt object was checked and none of them
+provide these). But rc/Makefile only adds hostapd_config_6e.o (or
+hostapd_config.o) to `rc`'s OBJS when RTCONFIG_BRCM_HOSTAPD is "y" — so once
+RTCONFIG_BRCM_HOSTAPD is genuinely off (see firmware/build.sh and
+0003-gt-ax6000-sys-util-gen-util-hostapd-decoupling.patch), the object that
+provides these two unconditionally-needed helper functions never gets built
+in, while the unconditional code that needs them still does.
+
+Confirmed via a real build attempt: `make gt-ax6000` (RTCONFIG_BRCM_HOSTAPD
+genuinely off) fails linking `rc` with "undefined reference to
+`wpa_supp_get_config_filename'" and "...to `wpa_supp_create_config_file'".
+
+Fix: drop the RTCONFIG_BRCM_HOSTAPD requirement from just this one OBJS
+addition (hostapd_config_6e.o / hostapd_config.o), leaving the rest of that
+Makefile block (the wpa_supplicant/WPS_PBCD-daemon-specific CFLAGS, LDFLAGS,
+and OBJS_WPS_PBCD additions) still correctly gated on RTCONFIG_BRCM_HOSTAPD,
+since those really are hostapd-specific. This is a general Makefile
+inconsistency — the same shape as 0003's sys_util/gen_util fix — not
+something specific to disabling hostapd for this model.
+
+`git apply --check`-verified against the pinned tag (3004.388.9), applied on
+top of 0001-0003. Not yet verified past that point in a completed build —
+see docs/build-environment.md and docs/ROADMAP.md.
+diff --git a/release/src/router/rc/Makefile b/release/src/router/rc/Makefile
+index f52a36d5f4..a0ba6019a9 100644
+--- a/release/src/router/rc/Makefile
++++ b/release/src/router/rc/Makefile
+@@ -903,7 +903,12 @@ LDFLAGS += -L$(TOP)/libasuslog -lasuslog
+ CFLAGS += -I$(TOP)/libasuslog
+ endif
+ 
+-ifeq ($(RTCONFIG_BRCM_HOSTAPD),y)
++# services.c's apply_config_to_driver()/apply_config_to_driver_wlc() are
++# unconditional (not gated by RTCONFIG_BRCM_HOSTAPD) and, via the
++# unconditionally-linked prebuild/broadcom.o, need wpa_supp_get_config_filename
++# and wpa_supp_create_config_file — provided only by hostapd_config_6e.o /
++# hostapd_config.o. So this OBJS addition must NOT be gated on
++# RTCONFIG_BRCM_HOSTAPD either, even though the rest of this hostapd block is.
+ ifeq ($(or $(RTCONFIG_WIFI6E),$(HND_ROUTER_AX_6756),$(RTCONFIG_BCM_502L07P2)),y)
+ OBJS += $(if $(wildcard sysdeps/broadcom/hostapd_config_6e.c),hostapd_config_6e.o,prebuild/hostapd_config_6e.o)
+ else
+@@ -911,8 +916,6 @@ OBJS += $(if $(wildcard sysdeps/broadcom/hostapd_config.c),hostapd_config.o,preb
+ endif
+ vpath %.c sysdeps/broadcom
+ 
+-endif
+-
+ CFLAGS += -I$(TOP)/wlceventd
+ LDFLAGS2 = $(LDFLAGS)
+ 

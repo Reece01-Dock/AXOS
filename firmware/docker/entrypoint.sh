@@ -113,33 +113,60 @@ sudo ln -sfn "$CCACHE_TOOLCHAINS_ROOT" /opt/toolchains
 echo "== toolchain mirror ready; ccache stats before build =="
 ccache -s || true
 
-echo "== building GT-AX6000 (jobs: ${BUILD_JOBS:-4}) =="
+echo "== building GT-AX6000 (jobs: ${BUILD_JOBS:-1}) =="
 # Target name confirmed against the upstream repo's own multi-model build
 # automation (tools/build-all: build_fw() does exactly
 # `cd release/src-rt-5.04axhnd.675x && make "$FWMODEL"` with
 # FWMODEL="gt-ax6000" — note the dash; "gtax6000" (no dash) is not a valid
 # target and was an earlier, unverified guess in this script).
 #
-# RTCONFIG_UUPLUGIN/RTCONFIG_GEARUPPLUGIN/RTCONFIG_TPVPN/RTCONFIG_AMAS_ADTBW/
-# RTCONFIG_PRELINK/RTCONFIG_BRCM_HOSTAPD/RTCONFIG_RGBLED/RTCONFIG_BT_CONN=n:
-# six confirmed prebuild/*.o gaps this Merlin release genuinely doesn't ship
-# for GT-AX6000, plus two hardware features this model doesn't have (RGB
-# LEDs, Bluetooth) — see docs/ROADMAP.md and firmware/patches/README.md for
-# the full trace of each. All eight default off in config.in/config_base
-# with GT-AX6000's own fragment never overriding any of them on; forcing
-# them off on the command line wins over whatever internal Kconfig/.config
-# state is otherwise enabling some of them, confirmed safe (no `override`
-# directive anywhere in the relevant Makefiles).
+# Eight ASUS features (UUPLUGIN/GEARUPPLUGIN cloud-account plugins, TPVPN,
+# AMAS_ADTBW, PRELINK, BRCM_HOSTAPD, RGBLED, BT_CONN) default off in both
+# release/src/router/config/config.in and config_base, and GT-AX6000's own
+# config fragment (targets/94912GW/94912GW.GT-AX6000) never turns any of
+# them on — yet leaving them enabled in the generated build state pulls in
+# prebuild/*.o objects and whole subdirectories this Merlin release
+# genuinely doesn't ship for GT-AX6000 (see docs/ROADMAP.md and
+# firmware/patches/README.md for the full per-flag trace).
 #
-# -j "$BUILD_JOBS": this SDK's own kernel-build step hardcodes its own
-# `make -j 9` internally (release/src-rt/Makefile ~line 1226-1227) —
-# confirmed in source, not assumed — so that one phase's parallelism isn't
-# actually governed by this flag; everything else in the tree that responds
-# to -j is bounded by it.
-make -j "${BUILD_JOBS:-4}" gt-ax6000 \
-  RTCONFIG_UUPLUGIN=n RTCONFIG_GEARUPPLUGIN=n \
-  RTCONFIG_TPVPN=n RTCONFIG_AMAS_ADTBW=n RTCONFIG_PRELINK=n \
-  RTCONFIG_BRCM_HOSTAPD=n RTCONFIG_RGBLED=n RTCONFIG_BT_CONN=n
+# RTCONFIG_X=n alone is NOT enough (confirmed via a real build that got
+# past the Makefile's OBJS/CFLAGS layer and still crashed on all eight
+# features anyway): release/src-rt/Makefile's RouterOptions config
+# generator unconditionally force-writes RTCONFIG_X=y into the generated
+# .config whenever a same-named *bare* variable (UUPLUGIN, GEARUPPLUGIN,
+# TPVPN, AMAS_ADTBW, PRELINK, BRCM_HOSTAPD, RGBLED, BT_CONN — no
+# RTCONFIG_ prefix) is "y", which it is from this model's own pristine
+# top-level .config. Passing the bare variable too short-circuits that
+# rewrite at its source.
+#
+# All sixteen overrides below (both forms of all eight flags) must be
+# truly *empty* (VAR=), not =n: this tree mixes two Makefile idioms for
+# reading these flags. `ifeq ($(RTCONFIG_X),y)` treats "n" and empty the
+# same (both != "y"), but `$(if $(RTCONFIG_X),...)` / `$(and ...)` /
+# `$(or ...)` (e.g. shared/Makefile's WireGuard-helper gate,
+# `$(or $(RTCONFIG_VPN_FUSION),$(RTCONFIG_TPVPN),...)`) treat ANY
+# non-empty string, "n" included, as true — so RTCONFIG_TPVPN=n was
+# silently dropping vpn_utils.o regardless of WireGuard's own real state.
+# Confirmed via a real build: =n produced undefined WireGuard-helper
+# references at link time; empty does not.
+#
+# -j "${BUILD_JOBS:-1}": defaults to strictly serial. This SDK's tree hit
+# two real parallel-build races under -j>1 (release/src/router/Makefile's
+# clean-build vs. fsbuild/ $(obj-y), fixed by patch 0008's .NOTPARALLEL;
+# and router-sysdep/wlan/scripts needing nvramUpdate from the sibling
+# nvram/ target before it's built, NOT yet patched) — override BUILD_JOBS
+# only once you've dealt with both, or are prepared to hit the second.
+# Also hardcodes its own `make -j 9` internally in the kernel-build phase
+# (release/src-rt/Makefile ~line 1226-1227), independent of this flag.
+make -j "${BUILD_JOBS:-1}" gt-ax6000 \
+  RTCONFIG_UUPLUGIN= UUPLUGIN= \
+  RTCONFIG_GEARUPPLUGIN= GEARUPPLUGIN= \
+  RTCONFIG_TPVPN= TPVPN= \
+  RTCONFIG_AMAS_ADTBW= AMAS_ADTBW= \
+  RTCONFIG_PRELINK= PRELINK= \
+  RTCONFIG_BRCM_HOSTAPD= BRCM_HOSTAPD= \
+  RTCONFIG_RGBLED= RGBLED= \
+  RTCONFIG_BT_CONN= BT_CONN=
 
 echo "== ccache stats after build (compare hit rate against the 'before' run above) =="
 ccache -s || true

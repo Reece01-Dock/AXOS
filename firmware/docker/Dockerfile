@@ -6,12 +6,17 @@ FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Package set per the Asuswrt-Merlin build documentation (superset is fine).
+# libtool-bin: Debian/Ubuntu splits the actual /usr/bin/libtool executable
+# script into this package — the plain "libtool" package alone only
+# provides libtoolize and the aclocal macros. Without it, quagga's install
+# step (which invokes `libtool --mode=install ...`) fails with "libtool:
+# Command not found" (confirmed via a real build attempt reaching that far).
 RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y --no-install-recommends \
     autoconf automake autopoint bash bc bison bzip2 ca-certificates ccache cmake \
     cpio curl diffutils file flex g++ g++-multilib gawk gcc gcc-multilib gettext \
     git gperf groff-base intltool libattr1-dev libc6-dev:i386 libelf-dev \
     libglib2.0-dev libgtk2.0-dev libltdl-dev liblzo2-dev libncurses5 \
-    libncurses5-dev libslang2 libssl-dev libtool libxml2-dev \
+    libncurses5-dev libslang2 libssl-dev libtool libtool-bin libxml2-dev \
     libxml-parser-perl make patch perl pkg-config python2 python3 \
     python-is-python2 rsync ruby sed sudo texinfo unzip uuid-dev wget xxd \
     zip zlib1g-dev \

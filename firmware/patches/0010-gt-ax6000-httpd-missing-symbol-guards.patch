@@ -1,0 +1,106 @@
+Fix real upstream gaps (not AXOS features): six functions are called or
+referenced from httpd/httpd.c and httpd/web.c with no implementation
+anywhere in this Merlin release's source tree, and no GT-AX6000 prebuilt
+object provides them either (checked rc/prebuild, libwebapi/prebuild, and
+confirmed no libasd.so ships for this model at all, unlike some siblings).
+Confirmed via a real build attempt: `make gt-ax6000` fails linking httpd
+with "undefined reference to" each of these symbols.
+
+- httpd_reject_url() (httpd.c, handle_request): declared and called
+  completely unguarded, with no implementation anywhere. Treated as "never
+  reject" (replaced `!httpd_reject_url(url)` with `!0`) — the dispatch now
+  behaves exactly as if this url-rejection feature had never been added.
+
+- set_ASUS_NEW_EULA() (web.c, do_set_ASUS_NEW_EULA_cgi): the .cgi handler
+  itself exists and is wired up, but the helper it calls does not exist
+  anywhere. Reports failure (ret = -1) rather than silently skipping the
+  call and falsely claiming success for a EULA acceptance that was never
+  actually recorded.
+
+- do_set_ASUS_privacy_policy_cgi(), do_get_ASUS_privacy_policy_cgi() (web.c,
+  mime_handlers[] table): declared unconditionally but never defined.
+  Guarded out of the table; those two .cgi endpoints are simply unhandled
+  (404) rather than failing to link.
+
+- do_set_security_update_cgi(), do_get_security_update_cgi() (web.c,
+  mime_handlers[] table): already gated behind
+  `#if defined(RTCONFIG_ASD) || defined(RTCONFIG_AHS)`, so ASD/AHS support
+  is genuinely on for this build — but neither function has an
+  implementation anywhere, and no libasd.so prebuilt exists for GT-AX6000
+  at all (compare httpd/../asd/prebuild/, which ships it for e.g.
+  RT-AX88U_PRO and GT-AXE11000 but not this model) — a genuine model gap,
+  not a build-config mismatch of the kind earlier patches fixed. Left the
+  RTCONFIG_ASD/RTCONFIG_AHS guard in place and added `&& 0` alongside it, so
+  re-enabling is a one-line change if this model ever gains ASD support.
+
+`git apply --check`-verified against the pinned tag (3004.388.9), applied on
+top of 0001-0009. Not yet verified past that point in a completed build —
+see docs/build-environment.md and docs/ROADMAP.md.
+
+diff --git a/release/src/router/httpd/httpd.c b/release/src/router/httpd/httpd.c
+index 79efe0bbc2..fb10029d38 100644
+--- a/release/src/router/httpd/httpd.c
++++ b/release/src/router/httpd/httpd.c
+@@ -1413,7 +1413,12 @@ handle_request(void)
+ 		if (do_ssl && !strcmp(url, "offline.htm"))
+ 			continue;
+ #endif
+-		if ((match(handler->pattern, url) || customized_match(handler->pattern, url)) && !httpd_reject_url(url))
++		/* httpd_reject_url() has no implementation anywhere in this Merlin
++		 * release's source tree, nor in any GT-AX6000 prebuilt object — a
++		 * genuine upstream gap. Treated as "never reject" (0), i.e. the
++		 * dispatch behaves as if this url-rejection feature were never
++		 * added — the same as the rest of this condition already was. */
++		if ((match(handler->pattern, url) || customized_match(handler->pattern, url)) && !0)
+ 		{	
+ 			if ( request_content_range!=NULL && strncasecmp( request_content_range, "bytes=", 6 ) == 0) {
+ #ifdef RTCONFIG_TC_GAME_ACC
+diff --git a/release/src/router/httpd/web.c b/release/src/router/httpd/web.c
+index 98a4df3b00..4a47c1cefe 100644
+--- a/release/src/router/httpd/web.c
++++ b/release/src/router/httpd/web.c
+@@ -20555,7 +20555,11 @@ do_set_ASUS_NEW_EULA_cgi(char *url, FILE *stream)
+ 
+ 	strlcpy(from_service, user_agent, sizeof(from_service));
+ 
+-	int ret = set_ASUS_NEW_EULA(ASUS_NEW_EULA, from_service);
++	/* set_ASUS_NEW_EULA() has no implementation anywhere in this Merlin
++	 * release's source tree, nor in any GT-AX6000 prebuilt object — a
++	 * genuine upstream gap. Report failure rather than falsely claiming
++	 * success for a EULA acceptance that was never actually recorded. */
++	int ret = -1;
+ 
+ 	if(root)
+ 		json_object_put(root);
+@@ -25814,8 +25818,15 @@ struct mime_handler mime_handlers[] =
+ 	{ "upload.cgi*", "text/html", no_cache_IE7, do_upload_post, do_upload_cgi, do_auth },
+ 	{ "set_ASUS_EULA.cgi*", "text/html", no_cache_IE7, do_html_post_and_get, do_set_ASUS_EULA_cgi, do_auth },
+ 	{ "set_ASUS_NEW_EULA.cgi*", "text/html", no_cache_IE7, do_html_post_and_get, do_set_ASUS_NEW_EULA_cgi, do_auth },
++#if 0
++	/* do_set_ASUS_privacy_policy_cgi()/do_get_ASUS_privacy_policy_cgi() have
++	 * no implementation anywhere in this Merlin release's source tree, nor
++	 * in any GT-AX6000 prebuilt object — a genuine upstream gap. Guarded
++	 * out; these two .cgi endpoints are simply unhandled (404) rather than
++	 * failing to link. */
+ 	{ "set_ASUS_privacy_policy.cgi*", "text/html", no_cache_IE7, do_html_post_and_get, do_set_ASUS_privacy_policy_cgi, do_auth },
+ 	{ "get_ASUS_privacy_policy.cgi*", "text/html", no_cache_IE7, do_html_post_and_get, do_get_ASUS_privacy_policy_cgi, do_auth },
++#endif
+ 	{ "set_TM_EULA.cgi*", "text/html", no_cache_IE7, do_html_post_and_get, do_set_TM_EULA_cgi, do_auth },
+ 	{ "set_app_mnt.cgi*", "text/html", no_cache_IE7, do_html_post_and_get, do_set_app_mnt_cgi, do_auth },
+ 	{ "get_app_mnt.cgi*", "text/html", no_cache_IE7, do_html_post_and_get, do_get_app_mnt_cgi, do_auth },
+@@ -26078,7 +26089,14 @@ struct mime_handler mime_handlers[] =
+ #ifdef RTCONFIG_SOFTWIRE46
+ 	{ "s46reset.cgi*", "text/html", no_cache_IE7, do_html_post_and_get, do_s46reset_cgi, do_auth },
+ #endif
+-#if defined(RTCONFIG_ASD) || defined(RTCONFIG_AHS)
++#if (defined(RTCONFIG_ASD) || defined(RTCONFIG_AHS)) && 0
++	/* do_set_security_update_cgi()/do_get_security_update_cgi() have no
++	 * implementation anywhere in this Merlin release's source tree; no
++	 * libasd.so/GT-AX6000 prebuilt object exists for this model either
++	 * (unlike e.g. RT-AX88U_PRO/GT-AXE11000, which do ship one) — a
++	 * genuine model gap, not a build-config mistake. Guarded out; these
++	 * two .cgi endpoints are simply unhandled (404) rather than failing
++	 * to link. */
+ 	{ "set_security_update.cgi*", "text/html", no_cache_IE7, do_html_post_and_get, do_set_security_update_cgi, do_auth },
+ 	{ "get_security_update.cgi*", "text/html", no_cache_IE7, do_html_post_and_get, do_get_security_update_cgi, do_auth },
+ #endif

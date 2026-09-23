@@ -31,7 +31,7 @@ actually changed. Confirmed directly against a real failing build log:
 `bcm_ethswutils.o` was compiling inside `router-sysdep/bcm_util/`, which only
 exists via this copy step.
 
-**Fix**: `firmware/patches/0003-incremental-router-sysdep-sync.patch` replaces
+**Fix**: `firmware/patches/0014-incremental-router-sysdep-sync.patch` replaces
 the wipe+copy with `rsync -a --delete`, which only touches files that
 actually changed (preserving existing `.o`/`.so` outputs for unchanged
 sources, correctly seen as up to date by Make's own mtime-based dependency

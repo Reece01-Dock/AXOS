@@ -1,0 +1,49 @@
+Fix a real upstream build bug (not an AXOS feature): release/src/router/Makefile
+adds `-I$(HND_SRC)/bcmdrivers/opensource/include/bcm963xx
+-I$(HND_SRC)/shared/opensource/include/bcm963xx` to the globally-exported
+CFLAGS only when RTCONFIG_BRCM_HOSTAPD is "y" — but httpd/web.c (via
+userspace/public/include/bcm_imgutil_api.h, which #includes bcmTag.h)
+needs the latter path unconditionally; nothing about that include is
+hostapd-specific. Same shape of bug as 0003 (sys_util/gen_util),
+0004/0006 (hostapd_config_6e.o and its support symbols): a downstream
+dependency incidentally wired up only under RTCONFIG_BRCM_HOSTAPD, when the
+code that actually needs it has nothing to do with hostapd.
+
+Confirmed via a real build attempt: `make gt-ax6000` (RTCONFIG_BRCM_HOSTAPD
+genuinely off) fails compiling httpd/web.o with "fatal error: bcmTag.h: No
+such file or directory".
+
+Fix: move just the bcm963xx include-path addition out of the
+RTCONFIG_BRCM_HOSTAPD block, so it's always exported. Left -DCONFIG_HOSTAPD
+and the other genuinely hostapd-specific CFLAGS/exports (bcmcrypto include,
+IEEE1905SOURCE_DIR, WPSSOURCE_DIR, LIBNL_DIR, WPA_SUPPLICANT_DIR, etc.)
+gated as before.
+
+`git apply --check`-verified against the pinned tag (3004.388.9), applied on
+top of 0001-0008. Not yet verified past that point in a completed build —
+see docs/build-environment.md and docs/ROADMAP.md.
+
+diff --git a/release/src/router/Makefile b/release/src/router/Makefile
+index fe6950ea62..e9b0032e00 100644
+--- a/release/src/router/Makefile
++++ b/release/src/router/Makefile
+@@ -484,10 +484,18 @@ CEVENT_APP_DIR := $(BASEDIR)/components/apps/cevent_app
+ export CFLAGS += -D__CONFIG_BCM_CEVENT__ -DBCM_CEVENT -DBCM_CEVENTD
+ export CONFIG_BCM_CEVENT=y
+ endif
++# httpd/web.c (via userspace/public/include/bcm_imgutil_api.h) needs
++# bcmTag.h from shared/opensource/include/bcm963xx unconditionally — not
++# hostapd-specific — but this include path was only ever added when
++# RTCONFIG_BRCM_HOSTAPD is "y". Confirmed via a real build attempt:
++# "fatal error: bcmTag.h: No such file or directory" compiling web.o.
++# Moved out of the RTCONFIG_BRCM_HOSTAPD block below so it's always on the
++# include path, matching the same "downstream dependency wrongly coupled to
++# the feature flag" shape as 0003/0004/0006.
++export CFLAGS += -I$(HND_SRC)/bcmdrivers/opensource/include/bcm963xx -I$(HND_SRC)/shared/opensource/include/bcm963xx
+ ifeq ($(RTCONFIG_BRCM_HOSTAPD),y)
+ export CFLAGS += -DCONFIG_HOSTAPD
+ export CFLAGS += -I$(SRCBASE)/include -I$(SRCBASE)/../components/bcmcrypto/include
+-export CFLAGS += -I$(HND_SRC)/bcmdrivers/opensource/include/bcm963xx -I$(HND_SRC)/shared/opensource/include/bcm963xx
+ export IEEE1905SOURCE_DIR := $(BASEDIR)/components/apps/ieee1905
+ export WPSSOURCE_DIR := $(BASEDIR)/components/apps/wps
+ export LIBNL_DIR := $(BASEDIR)/components/opensource/router_tools/libnl
