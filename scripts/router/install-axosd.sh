@@ -40,7 +40,7 @@ if [ ! -d "$USB_ROOT" ]; then
     exit 1
 fi
 
-mkdir -p "$BIN_DIR" "$AXOS_DIR/backups" "$AXOS_DIR/logs"
+mkdir -p "$BIN_DIR" "$AXOS_DIR/backups" "$AXOS_DIR/logs" "$AXOS_DIR/www"
 # Backups contain plaintext secrets (Wi-Fi passphrase, admin password, later
 # VPN keys) and the audit log records full shell_exec commands/output —
 # both must be owner-only. axosd enforces this itself on every write too
@@ -48,10 +48,21 @@ mkdir -p "$BIN_DIR" "$AXOS_DIR/backups" "$AXOS_DIR/logs"
 # directories are never briefly world-readable between creation and first use.
 chmod 700 "$AXOS_DIR" "$AXOS_DIR/backups" "$AXOS_DIR/logs"
 
+# Hot-deployable UI assets (Phase 7). Prefer www/ from the build dir when
+# present; otherwise leave an empty www/ for later axosctl deploy.
+if [ -d "$BUILD_DIR/www" ]; then
+    echo "==> Installing web UI to $AXOS_DIR/www"
+    cp -a "$BUILD_DIR/www/." "$AXOS_DIR/www/"
+fi
+
 for name in axosd axos-mcp axosctl; do
     if [ -f "$BUILD_DIR/$name" ]; then
         echo "==> Installing $name to $BIN_DIR/$name"
         cp "$BUILD_DIR/$name" "$BIN_DIR/$name"
+        chmod 755 "$BIN_DIR/$name"
+    elif [ -f "$BUILD_DIR/bin/$name" ]; then
+        echo "==> Installing $name to $BIN_DIR/$name"
+        cp "$BUILD_DIR/bin/$name" "$BIN_DIR/$name"
         chmod 755 "$BIN_DIR/$name"
     else
         echo "==> warning: $BUILD_DIR/$name not found — skipping"
@@ -69,11 +80,12 @@ if [ ! -f "$SERVICES_START" ]; then
 fi
 
 MARKER="# AXOS: axosd Core API (managed by install-axosd.sh)"
+UI_FLAG="-ui-dir=$AXOS_DIR/www"
 if ! grep -qF "$MARKER" "$SERVICES_START" 2>/dev/null; then
     {
         echo ""
         echo "$MARKER"
-        echo "$BIN_DIR/axosd serve -backend=asuswrt -api-addr=$API_ADDR -backup-dir=$AXOS_DIR/backups -audit=$AXOS_DIR/logs/audit.jsonl -service-log-dir=$AXOS_DIR/logs >> $AXOS_DIR/logs/axosd.log 2>&1 &"
+        echo "$BIN_DIR/axosd serve -backend=asuswrt -api-addr=$API_ADDR -backup-dir=$AXOS_DIR/backups -audit=$AXOS_DIR/logs/audit.jsonl -service-log-dir=$AXOS_DIR/logs $UI_FLAG >> $AXOS_DIR/logs/axosd.log 2>&1 &"
     } >> "$SERVICES_START"
     echo "==> Registered axosd in $SERVICES_START"
 else
@@ -83,7 +95,7 @@ fi
 chmod 755 "$SERVICES_START"
 
 echo "==> Done. axosd will start on next boot (Core API on $API_ADDR), or start it now with:"
-echo "    $BIN_DIR/axosd serve -backend=asuswrt -api-addr=$API_ADDR -backup-dir=$AXOS_DIR/backups -audit=$AXOS_DIR/logs/audit.jsonl -service-log-dir=$AXOS_DIR/logs &"
+echo "    $BIN_DIR/axosd serve -backend=asuswrt -api-addr=$API_ADDR -backup-dir=$AXOS_DIR/backups -audit=$AXOS_DIR/logs/audit.jsonl -service-log-dir=$AXOS_DIR/logs $UI_FLAG &"
 echo ""
 echo "axos-mcp is NOT started here — it's invoked per SSH session by whatever"
 echo "connects (e.g. \`ssh router $BIN_DIR/axos-mcp\`), since it talks over"

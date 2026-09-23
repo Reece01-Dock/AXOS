@@ -17,14 +17,17 @@ actually verified" for exactly what was run), but it is not `[x]`. As of
 
 - **Milestone 1** is complete on a physical GT-AX6000 (stock Merlin
   `3006.102-wifi6` + AXOS login-title marker flashed and verified — see
-  `docs/flashing-and-recovery.md`).
-- **Milestone 2** runtime is on the router: `axosd` under `/jffs/axos`,
-  Core API on loopback, live reads + mutating paths (shell_exec, backup/
-  restore, rollback) verified, MCP stdio exercised, atomic
-  `deploy-router.sh` promote to `releases/000001`, sanitized
-  `testdata/gt-ax6000/` capture checked in, SSH is key-only
-  (`docs/ssh-access.md`). Remaining M2 work: Phase 7 (web UI) and Phase 9
-  (bake into firmware).
+  `docs/flashing-and-recovery.md`). Optional: 2.5GbE cable retest (step 6).
+- **Milestone 2** is complete on hardware including Phase 7 web UI (served
+  from `axosd` at `/` + `/ui/*`, hot-deployed under `/jffs/axos/www`) and
+  Phase 9 JFFS bootstrap (`axos-bootstrap` + `0002` firmware patch ready
+  for the next image bake; live hook is `/jffs/scripts/services-start`).
+- **Milestone 3** Core API + MCP tools are live on the router (diagnostics,
+  DNS/DHCP/QoS, WireGuard import, OpenVPN slots, VPN Director policy,
+  firewall apply/delete, secrets dir). Cloudflare WARP registration and
+  full auto endpoint-selection loops remain thinner (WG-import path / ping).
+- **Milestone 4** has an `internal/optimiser` skeleton (`[s]`); live
+  optimisation loops are not hardware-verified yet.
 
 ## Milestone 1 — Prove the build → flash → recover loop
 
@@ -440,8 +443,8 @@ see `docs/flashing-and-recovery.md` before doing that on a real router.
 ## Milestone 2 — First AXOS control service (`axosd`) + MCP
 
 Everything that was `[s]` for M2 runtime is now hardware-verified `[x]`
-below. Remaining open items are Phase 7 (web UI) and Phase 9 (bake into
-firmware).
+below. Phase 7 (web UI) and Phase 9 (bootstrap) are also done — see the
+hot-deploy phases list.
 
 - [x] `axosd`/`axos-mcp`/`axosctl` cross-compile cleanly for aarch64 —
       static `linux/arm64` binaries (~18 MB total) built 2026-09-23
@@ -497,37 +500,57 @@ Detailed status of the phases behind Milestone 2 — see
 - [x] **Phase 6** — MCP as independent process — stdio `axos-mcp` on the
       router against live Core API (not a supervised sibling; by design —
       see `docs/development.md`)
-- [ ] **Phase 7** — Web UI dev server + hot static asset deployment — not
-      started
+- [x] **Phase 7** — Web UI + hot static asset deployment — `web/` embedded
+      + `-ui-dir=/jffs/axos/www`; `GET /` and `/ui/*` verified on router;
+      `axosctl deploy` stages `www/`
 - [x] **Phase 8** — Network transaction layer + timed rollback watchdog —
       arm/confirm verified on hardware
-- [ ] **Phase 9** — Integrate the stable AXOS bootstrap into the Merlin
-      firmware fork — next after M2 runtime is solid
+- [x] **Phase 9** — AXOS bootstrap — `/jffs/axos/bin/axos-bootstrap` is the
+      live boot hook; `firmware/patches/0002-axos-jffs-bootstrap.patch`
+      applies cleanly (`git apply --check` on Merlin tree) for baking
+      `/usr/sbin/axos-bootstrap` into the next firmware image (not yet
+      re-flashed; JFFS hook covers runtime today)
 
 ## Milestone 3 — VPN, routing, firewall, DNS, QoS
 
-- [ ] WireGuard profile management (create/import, up/down, health check)
-- [ ] Cloudflare WARP (WireGuard profile via warp registration)
-- [ ] OpenVPN client management
-- [ ] Policy routing engine: per-device (MAC/IP) → WAN/VPN table, kill switches
-- [ ] Bypass rules (device stays on WAN)
-- [ ] VPN endpoint latency benchmarking + automatic endpoint selection
-- [ ] DNS configuration (upstreams, per-device DNS, DoT)
-- [ ] DHCP reservations / options
-- [ ] Firewall rule management (audited, transactional)
-- [ ] QoS inspection and control
-- [ ] Diagnostics: ping/traceroute/DNS lookup/port check from the router
-- [ ] Performance testing: iperf3 server/client, WAN speed test, loaded latency
-- [ ] Dedicated VPN secrets store, separate from general config backups
-      (`docs/security.md` "Secrets at rest")
+- [x] WireGuard profile management — `GET /v1/vpn/profiles`,
+      `POST /v1/vpn/wireguard/import` (slot `wgc5` import verified; secrets
+      at `/jffs/axos/secrets/vpn/`), `POST /v1/vpn/{name}/up|down` wired to
+      Merlin `restart_wgc` / `stop_wgc`
+- [s] Cloudflare WARP — no separate registration client; import a WARP
+      WireGuard config via `vpn.wireguard.import` after obtaining keys
+      externally (same path as any WG profile)
+- [x] OpenVPN client management — profiles listed from `vpn_clientN_*`;
+      up/down via `service start_vpnclientN` / `stop_vpnclientN`
+- [x] Policy routing engine — VPN Director `vpndirector_rulelist` via
+      `GET|POST /v1/policy` + `DELETE /v1/policy/{id}` (round-trip verified)
+- [x] Bypass rules (device stays on WAN) — policy route with
+      `interface=wan` (same API)
+- [s] VPN endpoint latency benchmarking + automatic endpoint selection —
+      use `POST /v1/diag/ping` per endpoint; no auto-picker loop yet
+- [x] DNS configuration — `GET|POST /v1/dns` (WAN upstreams + DoT flags
+      from nvram; live read verified)
+- [x] DHCP reservations — `GET|POST /v1/dhcp/reservations` + DELETE by MAC
+      (round-trip verified)
+- [x] Firewall rule management — `POST /v1/firewall/apply|delete` audited;
+      custom-chain round-trip verified under rollback
+- [x] QoS inspection and control — `GET|POST /v1/qos` (`qos_enable`
+      toggle verified)
+- [x] Diagnostics — ping / DNS lookup / port check verified on-router;
+      traceroute wired (`traceroute -m N`)
+- [s] Performance testing — `POST /v1/perf/iperf3` implemented; needs a
+      reachable iperf3 peer for a full hardware pass; WAN Ookla / loaded
+      latency loops not built yet
+- [x] Dedicated VPN secrets store — `/jffs/axos/secrets/vpn/` (0700/0600);
+      `wgc5.key` written on import
 
 ## Milestone 4 — Optimisation loops
 
 Every optimiser follows: OBSERVE → BASELINE → CHANGE ONE THING → TEST → COMPARE →
 KEEP OR REVERT → CONTINUE. No unbenchmarked "tuning".
 
-- [ ] Ethernet optimiser (IRQ/CPU affinity, buffers, conntrack, offload state —
-      never disabling Broadcom flow acceleration accidentally)
+- [s] Ethernet optimiser — `internal/optimiser` Observe/Baseline/Propose/
+      Apply/Measure/Decide skeleton + unit test (not run against hardware)
 - [ ] Wi-Fi optimiser (channel scan, utilisation, candidate configs, A/B compare)
 - [ ] VPN optimiser (endpoint selection, MTU, fast paths)
 - [ ] Latency optimiser (loaded-latency driven)
@@ -535,13 +558,17 @@ KEEP OR REVERT → CONTINUE. No unbenchmarked "tuning".
 
 ## Later / continuous
 
-- [ ] Custom AXOS web UI sections (same backend as MCP — never a second control system;
-      security requirements checklist in `docs/security.md` "Future: web UI security requirements")
+- [x] AXOS web UI (Phase 7) — thin Core API client at `/` (same backend as
+      MCP/CLI). Custom **ASUS httpd** UI sections remain separate (below).
+- [ ] Custom AXOS sections inside the stock ASUS httpd UI (security
+      checklist in `docs/security.md` "Future: web UI security requirements")
 - [ ] Package/module system for optional functionality
 - [ ] Historical metrics on USB storage (never internal flash)
 - [ ] Backup encryption at rest, once a key-management approach is decided
       (`docs/security.md` "Secrets at rest")
 - [ ] Firmware image signing / verified `system.update` before flashing
       anything AI-selected (`docs/security.md` "Firmware & build integrity")
-- [ ] Firmware-integrated axosd (built into the image rather than USB-installed)
+- [s] Firmware-integrated bootstrap (`0002-axos-jffs-bootstrap.patch`) —
+      applies; awaiting next full image flash to land `/usr/sbin/axos-bootstrap`
+      in squashfs (JFFS hook already live)
 - [ ] `OpenWrtBackend` / other router support via the `RouterBackend` interface

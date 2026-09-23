@@ -239,7 +239,7 @@ continuous") starts from a checklist instead of a blank page:
 - [x] Core API (`axosd serve`) defaults to binding `127.0.0.1` only,
       enforced as the flag default (`docs/development.md`; use an SSH
       tunnel for dev-PC-to-router access, never widen the bind)
-- [ ] SSH password auth disabled on the router (verify during Milestone 1/2
+- [x] SSH password auth disabled on the router (verify during Milestone 1/2
       hardware bring-up; router default may have it enabled)
 - [ ] Backup encryption at rest (blocked on a key-management decision, above)
 - [ ] Dedicated VPN secrets store (Milestone 3)

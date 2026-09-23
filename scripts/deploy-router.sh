@@ -4,6 +4,10 @@
 # rsync the resulting release to the router's staging dir, then run
 # `axosctl deploy` remotely to promote it atomically.
 #
+# The staged release includes bin/{axosd,axos-mcp,axosctl} and www/
+# (Phase 7 web UI assets from repo web/*.html|css|js). On the router,
+# axosd serve -ui-dir=$AXOS_DIR/www picks up the hot-deployed assets.
+#
 # STATUS: verified 2026-09-23 end-to-end against a GT-AX6000 at /jffs/axos
 # (first install via install-axosd.sh, then this script with key-based SSH;
 # tar-over-ssh used when rsync is unavailable).
@@ -48,6 +52,21 @@ echo "==> Promoting on $ROUTER (checksum-verified there too — see internal/dep
 # drives subsequent promotes (don't run axosctl out of staging — Deploy
 # renames staging away).
 ssh $SSH_OPTS "$ROUTER" "'$REMOTE_ROOT/bin/axosctl' deploy -root '$REMOTE_ROOT' -skip-tests -skip-build -components '$COMPONENTS'"
+
+# Keep bin/ lean on JFFS: point bootstrap CLI at current release and drop
+# duplicate fat copies of the three binaries (44MB JFFS is tight).
+ssh $SSH_OPTS "$ROUTER" "sh -s" <<EOF
+set -e
+ROOT='$REMOTE_ROOT'
+# Ensure bin/axosctl exists for the next promote (copy once from current).
+mkdir -p "\$ROOT/bin"
+if [ -x "\$ROOT/current/bin/axosctl" ]; then
+  cp -a "\$ROOT/current/bin/axosctl" "\$ROOT/bin/axosctl"
+fi
+# Drop duplicate axosd/axos-mcp from bin/ — bootstrap prefers current/bin.
+rm -f "\$ROOT/bin/axosd" "\$ROOT/bin/axos-mcp"
+df -h /jffs | tail -1
+EOF
 
 echo ""
 echo "==> Deployed. Nothing was restarted automatically — restart what changed:"

@@ -118,11 +118,22 @@ pushed — a local `--repin` alone only changes your own checkout.
 
 ## Where AXOS eventually hooks into the firmware build
 
-Later milestones (not now):
+Later milestones (not now for full rootfs integration):
 
 - Install `axosd` into the rootfs and register an init hook.
 - Add busybox/tool config we need.
 - Web UI additions under the ASUS httpd's pages.
+
+**Phase 9 (bootstrap bake-in)** is started: `firmware/patches/0002-axos-jffs-bootstrap.patch`
+adds `/usr/sbin/axos-bootstrap` (via `release/src/router/others/axos-bootstrap`)
+so a flashed image can start a JFFS-deployed `axosd` without relying solely on
+hand-edited `services-start`. Source of truth:
+`firmware/patches/axos-bootstrap/axos-bootstrap.sh` (mirrored at
+`scripts/router/axos-bootstrap.sh`). Regenerate with
+`firmware/patches/gen-0002.sh` when the Merlin submodule is checked out.
+Until that image is flashed, `scripts/router/install-axosd.sh` + JFFS
+`services-start` remain the primary boot path — squashfs cannot be mutated
+live to drop files into `/usr/sbin`.
 
 All of that arrives as reviewed patches in `firmware/patches/`, one logical
 change per patch, applied in order by `build.sh`.

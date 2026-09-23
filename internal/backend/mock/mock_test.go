@@ -2,6 +2,8 @@ package mock
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/reece01-dock/axos/internal/backend"
@@ -144,3 +146,63 @@ func TestNVRAMDump_ReturnsACopy(t *testing.T) {
 }
 
 var _ backend.RouterBackend = (*Backend)(nil)
+
+func TestSetDHCPReservation_RoundTrip(t *testing.T) {
+	b := New()
+	ctx := context.Background()
+
+	r := backend.DHCPReservation{MAC: "aa:bb:cc:dd:ee:ff", IP: "192.168.1.99", Hostname: "nas"}
+	if err := b.SetDHCPReservation(ctx, r); err != nil {
+		t.Fatalf("SetDHCPReservation: %v", err)
+	}
+	list, err := b.DHCPReservations(ctx)
+	if err != nil {
+		t.Fatalf("DHCPReservations: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("list = %+v, want 1 entry", list)
+	}
+	if list[0].MAC != "AA:BB:CC:DD:EE:FF" || list[0].IP != "192.168.1.99" || list[0].Hostname != "nas" {
+		t.Errorf("got %+v", list[0])
+	}
+
+	// Update in place by MAC.
+	if err := b.SetDHCPReservation(ctx, backend.DHCPReservation{MAC: "AA:BB:CC:DD:EE:FF", IP: "192.168.1.100", Hostname: "nas2"}); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	list, _ = b.DHCPReservations(ctx)
+	if len(list) != 1 || list[0].IP != "192.168.1.100" || list[0].Hostname != "nas2" {
+		t.Fatalf("after update = %+v", list)
+	}
+
+	if err := b.DeleteDHCPReservation(ctx, "aa:bb:cc:dd:ee:ff"); err != nil {
+		t.Fatalf("DeleteDHCPReservation: %v", err)
+	}
+	list, _ = b.DHCPReservations(ctx)
+	if len(list) != 0 {
+		t.Fatalf("after delete = %+v, want empty", list)
+	}
+}
+
+func TestImportWireGuard_NoPrivateKeyInProfiles(t *testing.T) {
+	b := New()
+	ctx := context.Background()
+	err := b.ImportWireGuard(ctx, backend.WireGuardImport{
+		Unit: 1, PrivateKey: "SECRETKEY", PeerPublicKey: "peer",
+		Endpoint: "vpn.example.com", EndpointPort: 51820, Address: "10.6.0.2/32",
+		AllowedIPs: []string{"0.0.0.0/0"}, Description: "test",
+	})
+	if err != nil {
+		t.Fatalf("ImportWireGuard: %v", err)
+	}
+	profiles, err := b.VPNProfiles(ctx)
+	if err != nil {
+		t.Fatalf("VPNProfiles: %v", err)
+	}
+	if len(profiles) != 1 || profiles[0].Name != "wgc1" {
+		t.Fatalf("profiles = %+v", profiles)
+	}
+	if strings.Contains(fmt.Sprintf("%+v", profiles), "SECRETKEY") {
+		t.Fatal("private key must not appear in VPNProfiles")
+	}
+}

@@ -36,6 +36,10 @@ type Backend struct {
 	// BackupDir is where config.backup snapshots are stored. Should be on
 	// USB storage, not internal flash (docs/architecture.md "Data placement").
 	BackupDir string
+	// SecretsDir holds AXOS-managed secrets (VPN private keys, …) under
+	// <SecretsDir>/vpn/. Owner-only permissions; never returned by
+	// VPNProfiles / VPNStatus. See docs/security.md "Secrets at rest".
+	SecretsDir string
 	// Host is set when this Backend runs commands over SSH against a
 	// remote router rather than assuming it's running locally on-device
 	// ("Live Development Mode" — see WithHost). Empty means local exec.
@@ -52,6 +56,11 @@ type Option func(*Backend)
 // WithBackupDir overrides the default backup directory.
 func WithBackupDir(dir string) Option {
 	return func(b *Backend) { b.BackupDir = dir }
+}
+
+// WithSecretsDir overrides the default secrets directory (/jffs/axos/secrets).
+func WithSecretsDir(dir string) Option {
+	return func(b *Backend) { b.SecretsDir = dir }
 }
 
 // WithHost switches this Backend from local execution to running every
@@ -81,8 +90,9 @@ func New(opts ...Option) (*Backend, error) {
 	b := &Backend{
 		// (verify) default USB mount label/layout on GT-AX6000; Merlin
 		// typically mounts USB storage under /tmp/mnt/<label> or /mnt/<label>.
-		BackupDir: "/jffs/axos/backups",
-		runner:    execRunner{},
+		BackupDir:  "/jffs/axos/backups",
+		SecretsDir: "/jffs/axos/secrets",
+		runner:     execRunner{},
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -146,6 +156,22 @@ func (b *Backend) nvramGet(ctx context.Context, key string) (string, error) {
 		return "", fmt.Errorf("nvram get %s: %w", key, err)
 	}
 	return strings.TrimSpace(out), nil
+}
+
+// nvramSet writes a single nvram key (does not commit).
+func (b *Backend) nvramSet(ctx context.Context, key, value string) error {
+	if _, err := b.run(ctx, 5*time.Second, "nvram", "set", key+"="+value); err != nil {
+		return fmt.Errorf("nvram set %s: %w", key, err)
+	}
+	return nil
+}
+
+// nvramCommit persists pending nvram changes to flash.
+func (b *Backend) nvramCommit(ctx context.Context) error {
+	if _, err := b.run(ctx, 60*time.Second, "nvram", "commit"); err != nil {
+		return fmt.Errorf("nvram commit: %w", err)
+	}
+	return nil
 }
 
 // parseNvramShow parses `nvram show` output ("key=value" per line, with a

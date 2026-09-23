@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AXOS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/ui/styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+  <header class="hero">
+    <p class="brand">AXOS</p>
+    <h1 class="tagline">Router control, one plane.</h1>
+    <p class="lede">Live view of the Core API this UI shares with MCP and CLI.</p>
+    <div class="cta">
+      <button type="button" id="btn-refresh" class="btn primary">Refresh</button>
+      <a class="btn ghost" href="/healthz" target="_blank" rel="noopener">healthz</a>
+    </div>
+  </header>
+
+  <main class="console" id="console">
+    <section class="panel" aria-labelledby="sys-heading">
+      <h2 id="sys-heading">System</h2>
+      <pre id="sys-body" class="data">Loading…</pre>
+    </section>
+    <section class="panel" aria-labelledby="res-heading">
+      <h2 id="res-heading">Resources</h2>
+      <pre id="res-body" class="data">Loading…</pre>
+    </section>
+    <section class="panel" aria-labelledby="net-heading">
+      <h2 id="net-heading">Network</h2>
+      <pre id="net-body" class="data">Loading…</pre>
+    </section>
+    <section class="panel" aria-labelledby="wifi-heading">
+      <h2 id="wifi-heading">Wi-Fi</h2>
+      <pre id="wifi-body" class="data">Loading…</pre>
+    </section>
+    <section class="panel" aria-labelledby="vpn-heading">
+      <h2 id="vpn-heading">VPN</h2>
+      <pre id="vpn-body" class="data">Loading…</pre>
+    </section>
+    <section class="panel" aria-labelledby="diag-heading">
+      <h2 id="diag-heading">Diagnostics</h2>
+      <form id="diag-form" class="diag-form">
+        <label>Host <input name="host" value="1.1.1.1" autocomplete="off" /></label>
+        <button type="submit" class="btn primary">Ping</button>
+      </form>
+      <pre id="diag-body" class="data">—</pre>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span id="status">connecting</span>
+    <span class="sep">·</span>
+    <span>same Core API as MCP</span>
+  </footer>
+  <script src="/ui/app.js"></script>
+</body>
+</html>

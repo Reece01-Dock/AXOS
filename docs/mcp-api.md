@@ -36,10 +36,11 @@ Status: ✅ implemented in axosd (mock-tested, hardware-unverified) ·
 | `network.interfaces` | ✅ | state, role (wan/lan/...), addresses, counters, link speed |
 | `network.routes` | ✅ | per routing table |
 | `network.clients` | ✅ | DHCP + ARP + Wi-Fi assoc merged |
-| `network.firewall_rules` | ✅ | current packet-filter rules (read-only; mutation is 🔜 Milestone 3) |
-| `network.vpn_status` | ✅ | configured VPN tunnels + peers, read-only (never includes private keys); mutation (create/import/up/down) is 🔜 Milestone 3 |
-| `network.diag.ping` / `.traceroute` / `.dns_lookup` | 🔜 | from-router diagnostics |
-| `network.perf.iperf3` / `.speedtest` / `.loaded_latency` | 🔜 | benchmarking |
+| `network.firewall_rules` | ✅ | current packet-filter rules (read-only; mutation via `firewall.rules.set` / `.delete`) |
+| `network.vpn_status` | ✅ | configured VPN tunnels + peers, read-only (never includes private keys); see `vpn.*` for mutation |
+| `network.diag.ping` / `.traceroute` / `.dns_lookup` / `.port_check` | ✅ | from-router diagnostics |
+| `network.perf.iperf3` | ✅ | iperf3 client/server from the router |
+| `network.perf.speedtest` / `.loaded_latency` | 🔜 | additional benchmarking |
 
 ### Wi-Fi
 
@@ -52,21 +53,33 @@ Status: ✅ implemented in axosd (mock-tested, hardware-unverified) ·
 
 ### VPN (Milestone 3)
 
-`vpn.list`, `vpn.profile.create/import/delete`, `vpn.up/down`,
-`vpn.health`, `vpn.benchmark_endpoints`, `vpn.select_best_endpoint` —
-WireGuard, OpenVPN, WARP (WireGuard profile via WARP registration), later
-Tailscale. All **[danger]** where they touch routing.
+| Tool | Status | Notes |
+|---|---|---|
+| `vpn.list` | ✅ | configured profile slots (no private keys) |
+| `vpn.wireguard.import` | ✅ | **[danger]** import WG client into a Merlin slot |
+| `vpn.up` / `vpn.down` | ✅ | **[danger]** bring a named profile up/down |
+| `vpn.profile.create/delete`, `vpn.health`, `vpn.benchmark_endpoints`, `vpn.select_best_endpoint` | 🔜 | remaining VPN surface |
 
 ### Policy routing (Milestone 3)
 
-`route.policy.list`, `route.policy.set` (device/MAC/IP/subnet/port → wan|vpnX,
-kill_switch bool), `route.policy.delete`. **[danger]**. This is what implements
-"Put the TV and Xbox through WARP, keep the gaming PC on WAN".
+| Tool | Status | Notes |
+|---|---|---|
+| `route.policy.list` | ✅ | device → WAN/VPN steering |
+| `route.policy.set` | ✅ | **[danger]** |
+| `route.policy.delete` | ✅ | **[danger]** |
 
 ### Firewall / DNS / DHCP / QoS (Milestone 3)
 
-`firewall.rules.list/set/delete` **[danger]**, `dns.get/set` **[danger]**,
-`dhcp.leases/reservations.set`, `qos.status/set`.
+| Tool | Status | Notes |
+|---|---|---|
+| `firewall.rules.set` / `.delete` | ✅ | **[danger]** map to FirewallApply / FirewallDelete |
+| `dns.get` | ✅ | WAN/LAN upstreams + DoT |
+| `dns.set` | ✅ | **[danger]** |
+| `dhcp.reservations` | ✅ | list static mappings |
+| `dhcp.reservations.set` / `.delete` | ✅ | **[danger]** |
+| `dhcp.leases` | 🔜 | live lease table (clients cover much of this today) |
+| `qos.status` | ✅ | Adaptive QoS / Cake summary |
+| `qos.set` | ✅ | **[danger]** enable/disable |
 
 ### Safety & state
 

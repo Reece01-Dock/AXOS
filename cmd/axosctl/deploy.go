@@ -63,6 +63,9 @@ func runDeploy(ctx context.Context, f deployFlags) error {
 		if err := buildComponents(d.StagingDir(), components, *f.goos, *f.goarch); err != nil {
 			return fmt.Errorf("build failed, not deploying: %w", err)
 		}
+		if err := stageWebUI(d.StagingDir()); err != nil {
+			return fmt.Errorf("staging web UI: %w", err)
+		}
 	}
 
 	commit := gitCommit()
@@ -100,9 +103,7 @@ func buildComponents(outDir string, components []string, goos, goarch string) er
 		}
 		pkg := "./cmd/" + name
 		out := filepath.Join(binDir, name)
-		fmt.Printf("    go build -o %s %s\n", out, pkg)
-
-		cmd := exec.Command("go", "build", "-o", out, pkg)
+		cmd := exec.Command("go", "build", "-trimpath", "-ldflags=-s -w", "-o", out, pkg)
 		cmd.Env = os.Environ()
 		if goos != "" {
 			cmd.Env = append(cmd.Env, "GOOS="+goos)
@@ -110,11 +111,38 @@ func buildComponents(outDir string, components []string, goos, goarch string) er
 		if goarch != "" {
 			cmd.Env = append(cmd.Env, "GOARCH="+goarch)
 		}
+		// Cross-compile as a static binary so the router (musl/uclibc-ish
+		// userspace) doesn't need a matching glibc.
+		cmd.Env = append(cmd.Env, "CGO_ENABLED=0")
+		fmt.Printf("    go build -trimpath -ldflags=-s -w -o %s %s\n", out, pkg)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("building %s: %w", pkg, err)
 		}
 	}
+	return nil
+}
+
+// stageWebUI copies repo web/ static assets (html/css/js, not embed.go)
+// into staging/www/ for Phase 7 hot-deploy under <axos-root>/www/.
+func stageWebUI(outDir string) error {
+	wwwDir := filepath.Join(outDir, "www")
+	if err := os.MkdirAll(wwwDir, 0755); err != nil {
+		return err
+	}
+	repoWeb := filepath.Join("web")
+	for _, name := range []string{"index.html", "styles.css", "app.js"} {
+		src := filepath.Join(repoWeb, name)
+		data, err := os.ReadFile(src)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", src, err)
+		}
+		dst := filepath.Join(wwwDir, name)
+		if err := os.WriteFile(dst, data, 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", dst, err)
+		}
+	}
+	fmt.Printf("    staged web UI -> %s\n", wwwDir)
 	return nil
 }
 

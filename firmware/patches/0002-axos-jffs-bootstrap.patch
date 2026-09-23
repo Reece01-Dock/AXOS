@@ -1,0 +1,70 @@
+diff --git a/release/src/router/others/axos-bootstrap b/release/src/router/others/axos-bootstrap
+new file mode 100755
+index 0000000..a1b2c3d
+--- /dev/null
++++ b/release/src/router/others/axos-bootstrap
+@@ -0,0 +1,64 @@
++#!/bin/sh
++# axos-bootstrap — idempotent start of axosd from JFFS (Phase 9 firmware bake-in
++# companion; also usable from Merlin services-start on a running image).
++#
++# Looks for a deployed axosd under /jffs/axos/current/bin or /jffs/axos/bin
++# (install-axosd.sh / axosctl deploy layouts). If found and not already
++# running, starts it with the same flags as install-axosd.sh.
++#
++# This script is the source of truth copied into firmware via
++# firmware/patches/axos-bootstrap/ and 0002-axos-jffs-bootstrap.patch.
++# On a live squashfs root we cannot rewrite /usr/sbin — JFFS services-start
++# remains the primary hook until the next firmware image that includes this
++# binary under /usr/sbin/axos-bootstrap.
++set -eu
++
++API_ADDR="${API_ADDR:-127.0.0.1:9090}"
++
++resolve_axos_dir() {
++  if [ -x /jffs/axos/current/bin/axosd ]; then
++    echo /jffs/axos/current
++    return
++  fi
++  if [ -x /jffs/axos/bin/axosd ]; then
++    echo /jffs/axos
++    return
++  fi
++  return 1
++}
++
++if ! AXOS_ROOT="$(resolve_axos_dir)"; then
++  # Nothing installed yet — silent success so boot hooks don't fail.
++  exit 0
++fi
++
++AXOSD="$AXOS_ROOT/bin/axosd"
++# Prefer the install root (/jffs/axos) for mutable state even when the
++# binary lives under current/ (deploy symlink layout).
++if [ -d /jffs/axos/backups ] || [ -d /jffs/axos ]; then
++  STATE_DIR=/jffs/axos
++else
++  STATE_DIR="$AXOS_ROOT"
++fi
++
++mkdir -p "$STATE_DIR/backups" "$STATE_DIR/logs" "$STATE_DIR/www"
++
++if pidof axosd >/dev/null 2>&1; then
++  exit 0
++fi
++
++UI_FLAG=""
++if [ -d "$STATE_DIR/www" ]; then
++  UI_FLAG="-ui-dir=$STATE_DIR/www"
++fi
++
++# Bound to loopback only — see docs/security.md.
++# shellcheck disable=SC2086
++"$AXOSD" serve \
++  -backend=asuswrt \
++  -api-addr="$API_ADDR" \
++  -backup-dir="$STATE_DIR/backups" \
++  -audit="$STATE_DIR/logs/audit.jsonl" \
++  -service-log-dir="$STATE_DIR/logs" \
++  $UI_FLAG \
++  >>"$STATE_DIR/logs/axosd.log" 2>&1 &

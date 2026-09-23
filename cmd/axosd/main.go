@@ -8,6 +8,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -26,6 +27,7 @@ import (
 	"github.com/reece01-dock/axos/internal/rollbackctl"
 	"github.com/reece01-dock/axos/internal/supervisor"
 	"github.com/reece01-dock/axos/internal/svcconfig"
+	"github.com/reece01-dock/axos/web"
 )
 
 func main() {
@@ -72,6 +74,10 @@ Common flags:
 'serve'-only flags:
   -api-addr string        Address the Core API listens on (default "127.0.0.1:9090" —
                            see docs/security.md before widening this)
+  -ui-dir string          Directory of web UI static assets (index.html, styles.css,
+                            app.js). If set and the directory exists, serve from disk
+                            (hot-deploy under <axos-root>/www/). Otherwise use the
+                            assets embedded in this binary.
   -services-config string  Path to a JSON file registering hot-deployable
                             sibling services for axosd to supervise (optional —
                             see internal/svcconfig; empty/missing is normal)
@@ -90,14 +96,15 @@ func backendFlags(fs *flag.FlagSet) *backendselect.Options {
 }
 
 func runServe(args []string) {
-	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	beOpts := backendFlags(fs)
-	auditPath := fs.String("audit", "./axosd-audit.jsonl", "Path to the append-only audit log")
-	apiAddr := fs.String("api-addr", "127.0.0.1:9090", "Address the Core API listens on")
-	servicesConfig := fs.String("services-config", "", "Path to a JSON file registering supervised sibling services (optional)")
-	serviceLogDir := fs.String("service-log-dir", "", "Directory for supervised services' logs (optional)")
-	footprintPath := fs.String("footprint", "./axosd-footprint.jsonl", "Path to the append-only RAM footprint log")
-	_ = fs.Parse(args)
+	flagSet := flag.NewFlagSet("serve", flag.ExitOnError)
+	beOpts := backendFlags(flagSet)
+	auditPath := flagSet.String("audit", "./axosd-audit.jsonl", "Path to the append-only audit log")
+	apiAddr := flagSet.String("api-addr", "127.0.0.1:9090", "Address the Core API listens on")
+	uiDir := flagSet.String("ui-dir", "", "Directory of web UI static assets; if set and exists, serve from disk, else embedded web.FS")
+	servicesConfig := flagSet.String("services-config", "", "Path to a JSON file registering supervised sibling services (optional)")
+	serviceLogDir := flagSet.String("service-log-dir", "", "Directory for supervised services' logs (optional)")
+	footprintPath := flagSet.String("footprint", "./axosd-footprint.jsonl", "Path to the append-only RAM footprint log")
+	_ = flagSet.Parse(args)
 
 	be, err := backendselect.New(*beOpts)
 	if err != nil {
@@ -120,6 +127,7 @@ func runServe(args []string) {
 	rb := newLoggingRollbackEngine(al)
 	server := api.NewServer(be, rb, al)
 	server.Footprint = fp
+	server.SetUI(resolveUIFS(*uiDir))
 
 	sup := supervisor.New(*serviceLogDir)
 	specs, err := svcconfig.Load(*servicesConfig)
@@ -161,6 +169,19 @@ func runServe(args []string) {
 	if err := httpServer.Serve(ln); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("axosd: API server exited with error: %v", err)
 	}
+}
+
+// resolveUIFS returns a disk FS when uiDir is set and exists as a directory;
+// otherwise the embedded web.FS fallback (Phase 7 hot-deploy vs bake-in).
+func resolveUIFS(uiDir string) fs.FS {
+	if uiDir != "" {
+		if st, err := os.Stat(uiDir); err == nil && st.IsDir() {
+			log.Printf("axosd: serving web UI from %s", uiDir)
+			return os.DirFS(uiDir)
+		}
+		log.Printf("axosd: -ui-dir=%s not found or not a directory — using embedded web UI", uiDir)
+	}
+	return web.FS
 }
 
 func runMCP(args []string) {

@@ -63,4 +63,47 @@ type RouterBackend interface {
 	// VPNStatus returns configured VPN tunnels and their peers (WireGuard,
 	// OpenVPN, WARP). Never includes private keys — see VPNPeer.
 	VPNStatus(ctx context.Context) ([]VPNTunnel, error)
+
+	// --- Milestone 3 -------------------------------------------------------
+
+	// Ping / Traceroute / DNSLookup / PortCheck run from-router diagnostics.
+	Ping(ctx context.Context, host string, count int) (DiagResult, error)
+	Traceroute(ctx context.Context, host string, maxHops int) (DiagResult, error)
+	DNSLookup(ctx context.Context, name string) (DiagResult, error)
+	PortCheck(ctx context.Context, host string, port int) (DiagResult, error)
+
+	// Iperf3 runs a short bandwidth test (server or client mode).
+	Iperf3(ctx context.Context, opts IperfOpts) (PerfResult, error)
+
+	// DNSConfig / SetDNSConfig read and update DNS upstreams / DoT.
+	DNSConfig(ctx context.Context) (DNSInfo, error)
+	SetDNSConfig(ctx context.Context, cfg DNSInfo) error
+
+	// DHCPReservations / SetDHCPReservation manage static DHCP mappings.
+	DHCPReservations(ctx context.Context) ([]DHCPReservation, error)
+	SetDHCPReservation(ctx context.Context, r DHCPReservation) error
+	DeleteDHCPReservation(ctx context.Context, mac string) error
+
+	// QoSStatus / SetQoSEnable inspect and toggle QoS.
+	QoSStatus(ctx context.Context) (QoSInfo, error)
+	SetQoSEnable(ctx context.Context, enabled bool) error
+
+	// VPNProfiles lists configured profile slots (no private keys).
+	VPNProfiles(ctx context.Context) ([]VPNProfile, error)
+	// ImportWireGuard writes a WireGuard client profile into a Merlin slot.
+	ImportWireGuard(ctx context.Context, p WireGuardImport) error
+	// VPNUp / VPNDown bring a named profile (e.g. "wgc1", "ovpnc1") up/down.
+	VPNUp(ctx context.Context, name string) error
+	VPNDown(ctx context.Context, name string) error
+
+	// FirewallApply appends a raw iptables-style rule; FirewallDelete removes
+	// a matching rule. Both are [danger] at the MCP layer.
+	FirewallApply(ctx context.Context, rule FirewallRule) error
+	FirewallDelete(ctx context.Context, rule FirewallRule) error
+
+	// PolicyRoutes / SetPolicyRoute / DeletePolicyRoute manage per-device
+	// WAN/VPN steering (VPN Director / Fusion style).
+	PolicyRoutes(ctx context.Context) ([]PolicyRoute, error)
+	SetPolicyRoute(ctx context.Context, r PolicyRoute) error
+	DeletePolicyRoute(ctx context.Context, id string) error
 }

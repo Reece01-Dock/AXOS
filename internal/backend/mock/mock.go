@@ -39,6 +39,14 @@ type Backend struct {
 	vpnOrder []string
 	res      backend.Resources
 
+	dns         backend.DNSInfo
+	dhcp        []backend.DHCPReservation
+	qos         backend.QoSInfo
+	vpnProfiles map[string]backend.VPNProfile
+	vpnProfOrd  []string
+	vpnSecrets  map[string]string // name -> private key; never returned by VPNProfiles
+	policy      []backend.PolicyRoute
+
 	backups  map[string]backend.BackupInfo
 	restored []string
 	nextID   int
@@ -61,12 +69,19 @@ func New() *Backend {
 			"wl1_wpa_psk": "MockWifiPassphrase123",
 			"http_passwd": "mock-admin-password",
 		},
-		ifaces:   make(map[string]backend.Interface),
-		clients:  make(map[string]backend.Client),
-		wifi:     make(map[string]backend.WiFiRadio),
-		services: make(map[string]backend.ServiceStatus),
-		vpn:      make(map[string]backend.VPNTunnel),
-		backups:  make(map[string]backend.BackupInfo),
+		ifaces:      make(map[string]backend.Interface),
+		clients:     make(map[string]backend.Client),
+		wifi:        make(map[string]backend.WiFiRadio),
+		services:    make(map[string]backend.ServiceStatus),
+		vpn:         make(map[string]backend.VPNTunnel),
+		backups:     make(map[string]backend.BackupInfo),
+		vpnProfiles: make(map[string]backend.VPNProfile),
+		vpnSecrets:  make(map[string]string),
+		dns: backend.DNSInfo{
+			WANUpstreams: []string{"1.1.1.1", "1.0.0.1"},
+			LANUpstreams: []string{"192.168.1.1"},
+		},
+		qos: backend.QoSInfo{Enabled: false, Mode: "0", Method: 0, ObwKbps: "1000000", IbwKbps: "1000000"},
 		res: backend.Resources{
 			CPULoad1: 0.12, CPULoad5: 0.18, CPULoad15: 0.15,
 			MemTotalKB: 1024 * 1024, MemUsedKB: 412 * 1024, MemFreeKB: 612 * 1024,

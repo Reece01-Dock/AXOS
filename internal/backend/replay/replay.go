@@ -17,6 +17,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -158,6 +160,249 @@ func (b *Backend) ListBackups(_ context.Context) ([]backend.BackupInfo, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
 	return out, nil
+}
+
+// --- Milestone 3: diagnostics / mutations are not supported in replay -----
+
+func (b *Backend) Ping(_ context.Context, host string, _ int) (backend.DiagResult, error) {
+	return backend.DiagResult{}, fmt.Errorf("replay: ping is not supported against a replayed fixture (no real shell to reach %q — use --backend mock or asuswrt)", host)
+}
+
+func (b *Backend) Traceroute(_ context.Context, host string, _ int) (backend.DiagResult, error) {
+	return backend.DiagResult{}, fmt.Errorf("replay: traceroute is not supported against a replayed fixture (no real shell to reach %q — use --backend mock or asuswrt)", host)
+}
+
+func (b *Backend) DNSLookup(_ context.Context, name string) (backend.DiagResult, error) {
+	return backend.DiagResult{}, fmt.Errorf("replay: dnslookup is not supported against a replayed fixture (no real resolver for %q — use --backend mock or asuswrt)", name)
+}
+
+func (b *Backend) PortCheck(_ context.Context, host string, port int) (backend.DiagResult, error) {
+	return backend.DiagResult{}, fmt.Errorf("replay: portcheck is not supported against a replayed fixture (no real socket to %s:%d — use --backend mock or asuswrt)", host, port)
+}
+
+func (b *Backend) Iperf3(_ context.Context, _ backend.IperfOpts) (backend.PerfResult, error) {
+	return backend.PerfResult{}, fmt.Errorf("replay: iperf3 is not supported against a replayed fixture (use --backend mock or asuswrt)")
+}
+
+func (b *Backend) SetDNSConfig(_ context.Context, _ backend.DNSInfo) error {
+	return fmt.Errorf("replay: set dns config is not supported against a replayed fixture (immutable snapshot)")
+}
+
+func (b *Backend) SetDHCPReservation(_ context.Context, _ backend.DHCPReservation) error {
+	return fmt.Errorf("replay: set dhcp reservation is not supported against a replayed fixture (immutable snapshot)")
+}
+
+func (b *Backend) DeleteDHCPReservation(_ context.Context, _ string) error {
+	return fmt.Errorf("replay: delete dhcp reservation is not supported against a replayed fixture (immutable snapshot)")
+}
+
+func (b *Backend) SetQoSEnable(_ context.Context, _ bool) error {
+	return fmt.Errorf("replay: set qos enable is not supported against a replayed fixture (immutable snapshot)")
+}
+
+func (b *Backend) ImportWireGuard(_ context.Context, _ backend.WireGuardImport) error {
+	return fmt.Errorf("replay: import wireguard is not supported against a replayed fixture (immutable snapshot)")
+}
+
+func (b *Backend) VPNUp(_ context.Context, name string) error {
+	return fmt.Errorf("replay: vpn up %q is not supported against a replayed fixture (immutable snapshot)", name)
+}
+
+func (b *Backend) VPNDown(_ context.Context, name string) error {
+	return fmt.Errorf("replay: vpn down %q is not supported against a replayed fixture (immutable snapshot)", name)
+}
+
+func (b *Backend) FirewallApply(_ context.Context, _ backend.FirewallRule) error {
+	return fmt.Errorf("replay: firewall apply is not supported against a replayed fixture (immutable snapshot)")
+}
+
+func (b *Backend) FirewallDelete(_ context.Context, _ backend.FirewallRule) error {
+	return fmt.Errorf("replay: firewall delete is not supported against a replayed fixture (immutable snapshot)")
+}
+
+func (b *Backend) SetPolicyRoute(_ context.Context, _ backend.PolicyRoute) error {
+	return fmt.Errorf("replay: set policy route is not supported against a replayed fixture (immutable snapshot)")
+}
+
+func (b *Backend) DeletePolicyRoute(_ context.Context, _ string) error {
+	return fmt.Errorf("replay: delete policy route is not supported against a replayed fixture (immutable snapshot)")
+}
+
+// --- Milestone 3: read methods derived from snapshot NVRAM -----------------
+
+func (b *Backend) DNSConfig(_ context.Context) (backend.DNSInfo, error) {
+	nv := b.snapshot.NVRAM
+	if nv == nil {
+		return backend.DNSInfo{}, nil
+	}
+	wan := nv["wan0_dns"]
+	if wan == "" {
+		wan = nv["wan_dns"]
+	}
+	info := backend.DNSInfo{
+		WANUpstreams: fieldsOrNil(wan),
+		DoTEnabled:   nv["dnspriv_enable"] == "1",
+		DoTProfile:   nv["dnspriv_profile"],
+		DoTRules:     nv["dnspriv_rulelist"],
+	}
+	for _, k := range []string{"dhcp_dns1_x", "lan_dns1_x", "dhcp_dns2_x", "lan_dns2_x"} {
+		if v := strings.TrimSpace(nv[k]); v != "" {
+			info.LANUpstreams = appendUnique(info.LANUpstreams, v)
+		}
+	}
+	return info, nil
+}
+
+func (b *Backend) DHCPReservations(_ context.Context) ([]backend.DHCPReservation, error) {
+	if b.snapshot.NVRAM == nil {
+		return nil, nil
+	}
+	return parseDHCPStaticList(b.snapshot.NVRAM["dhcp_staticlist"]), nil
+}
+
+func (b *Backend) QoSStatus(_ context.Context) (backend.QoSInfo, error) {
+	nv := b.snapshot.NVRAM
+	if nv == nil {
+		return backend.QoSInfo{}, nil
+	}
+	info := backend.QoSInfo{
+		Enabled: nv["qos_enable"] == "1",
+		ObwKbps: nv["qos_obw"],
+		IbwKbps: nv["qos_ibw"],
+	}
+	if m := nv["qos_method"]; m != "" {
+		info.Mode = m
+		if n, err := strconv.Atoi(m); err == nil {
+			info.Method = n
+		}
+	}
+	return info, nil
+}
+
+func (b *Backend) VPNProfiles(_ context.Context) ([]backend.VPNProfile, error) {
+	nv := b.snapshot.NVRAM
+	if nv == nil {
+		return nil, nil
+	}
+	var out []backend.VPNProfile
+	for i := 1; i <= 5; i++ {
+		prefix := fmt.Sprintf("wgc%d_", i)
+		ep := nv[prefix+"ep_addr"]
+		if ep == "" && nv[prefix+"priv"] == "" && nv[prefix+"ppub"] == "" && nv[prefix+"enable"] == "" {
+			continue
+		}
+		endpoint := ep
+		if port := nv[prefix+"ep_port"]; port != "" && port != "0" {
+			endpoint = ep + ":" + port
+		}
+		out = append(out, backend.VPNProfile{
+			Name:        fmt.Sprintf("wgc%d", i),
+			Type:        "wireguard",
+			Description: nv[prefix+"desc"],
+			Enabled:     nv[prefix+"enable"] == "1",
+			Endpoint:    endpoint,
+			KillSwitch:  nv[prefix+"fw"] == "1",
+		})
+	}
+	for i := 1; i <= 5; i++ {
+		desc := nv[fmt.Sprintf("vpn_client%d_desc", i)]
+		addr := nv[fmt.Sprintf("vpn_client%d_addr", i)]
+		state := nv[fmt.Sprintf("vpn_client%d_state", i)]
+		if desc == "" && addr == "" && state == "" {
+			continue
+		}
+		out = append(out, backend.VPNProfile{
+			Name:        fmt.Sprintf("ovpnc%d", i),
+			Type:        "openvpn",
+			Description: desc,
+			Enabled:     state == "2" || state == "1",
+			Endpoint:    addr,
+			KillSwitch:  nv[fmt.Sprintf("vpn_client%d_enforce", i)] == "1",
+		})
+	}
+	return out, nil
+}
+
+func (b *Backend) PolicyRoutes(_ context.Context) ([]backend.PolicyRoute, error) {
+	if b.snapshot.NVRAM == nil {
+		return nil, nil
+	}
+	return parseVPNDirectorRuleList(b.snapshot.NVRAM["vpndirector_rulelist"]), nil
+}
+
+func fieldsOrNil(s string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	return strings.Fields(s)
+}
+
+func appendUnique(slice []string, v string) []string {
+	for _, x := range slice {
+		if x == v {
+			return slice
+		}
+	}
+	return append(slice, v)
+}
+
+func parseDHCPStaticList(raw string) []backend.DHCPReservation {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var out []backend.DHCPReservation
+	for _, part := range strings.Split(raw, "<") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		fields := strings.Split(part, ">")
+		if len(fields) < 2 {
+			continue
+		}
+		r := backend.DHCPReservation{
+			MAC: strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(fields[0]), "-", ":")),
+			IP:  strings.TrimSpace(fields[1]),
+		}
+		if len(fields) > 2 {
+			r.Hostname = strings.TrimSpace(fields[2])
+		}
+		if r.MAC == "" || r.IP == "" {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+func parseVPNDirectorRuleList(raw string) []backend.PolicyRoute {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var out []backend.PolicyRoute
+	idx := 0
+	for _, part := range strings.Split(raw, "<") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		fields := strings.Split(part, ">")
+		if len(fields) < 5 {
+			continue
+		}
+		idx++
+		out = append(out, backend.PolicyRoute{
+			ID:          strconv.Itoa(idx),
+			Enabled:     fields[0] == "1",
+			Description: fields[1],
+			Source:      fields[2],
+			Interface:   fields[4],
+		})
+	}
+	return out
 }
 
 var _ backend.RouterBackend = (*Backend)(nil)

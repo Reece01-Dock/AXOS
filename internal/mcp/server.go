@@ -13,7 +13,7 @@ import (
 	"github.com/reece01-dock/axos/internal/rollbackctl"
 )
 
-const serverVersion = "0.1.0-milestone2"
+const serverVersion = "0.2.0-milestone3"
 
 // handlerFunc implements one MCP tool. args is the raw JSON arguments object
 // (may be nil/empty for tools that take none).
@@ -47,7 +47,7 @@ type Server struct {
 	tools map[string]registeredTool
 }
 
-// NewServer builds a Server with all Milestone-2 tools registered.
+// NewServer builds a Server with all Milestone-2 and Milestone-3 tools registered.
 func NewServer(b backend.RouterBackend, rb rollbackctl.Controller, al *audit.Logger, actor string) *Server {
 	if actor == "" {
 		actor = "mcp:unknown"
@@ -107,6 +107,58 @@ func (s *Server) registerTools() {
 	// perform the fix would be circular. It is still fully audited.
 	s.register("config.restore", "Restore a named backup by id.", schema(`"backup_id":{"type":"string"}`), false, handleConfigRestore)
 	s.register("config.list_backups", "List known backups, newest first.", schema(""), false, handleListBackups)
+
+	// --- Milestone 3 -------------------------------------------------------
+	s.register("network.diag.ping", "Ping a host from the router.",
+		schema(`"host":{"type":"string"},"count":{"type":"integer","default":4}`), false, handleDiagPing)
+	s.register("network.diag.traceroute", "Traceroute to a host from the router.",
+		schema(`"host":{"type":"string"},"max_hops":{"type":"integer","default":30}`), false, handleDiagTraceroute)
+	s.register("network.diag.dns_lookup", "Resolve a DNS name from the router.",
+		schema(`"name":{"type":"string"}`), false, handleDiagDNSLookup)
+	s.register("network.diag.port_check", "Check TCP connectivity to host:port from the router.",
+		schema(`"host":{"type":"string"},"port":{"type":"integer"}`), false, handleDiagPortCheck)
+	s.register("network.perf.iperf3", "Run iperf3 (client or server mode) from the router.",
+		schema(`"mode":{"type":"string"},"target":{"type":"string"},"port":{"type":"integer"},"seconds":{"type":"integer"},"reverse":{"type":"boolean"},"udp":{"type":"boolean"}`),
+		false, handleIperf3)
+
+	s.register("dns.get", "Read DNS upstream / DoT configuration.", schema(""), false, handleDNSGet)
+	s.register("dns.set", "Update DNS upstream / DoT configuration.",
+		schema(`"wan_upstreams":{"type":"array","items":{"type":"string"}},"lan_upstreams":{"type":"array","items":{"type":"string"}},"dot_enabled":{"type":"boolean"},"dot_profile":{"type":"string"},"dot_rules":{"type":"string"}`),
+		true, handleDNSSet)
+
+	s.register("dhcp.reservations", "List static DHCP reservations.", schema(""), false, handleDHCPReservations)
+	s.register("dhcp.reservations.set", "Create or update a DHCP reservation.",
+		schema(`"mac":{"type":"string"},"ip":{"type":"string"},"hostname":{"type":"string"}`),
+		true, handleDHCPReservationsSet)
+	s.register("dhcp.reservations.delete", "Delete a DHCP reservation by MAC.",
+		schema(`"mac":{"type":"string"}`), true, handleDHCPReservationsDelete)
+
+	s.register("qos.status", "Adaptive QoS / Cake status summary.", schema(""), false, handleQoSStatus)
+	s.register("qos.set", "Enable or disable QoS.",
+		schema(`"enabled":{"type":"boolean"}`), true, handleQoSSet)
+
+	s.register("vpn.list", "List configured VPN client profile slots (no private keys).", schema(""), false, handleVPNList)
+	s.register("vpn.wireguard.import", "Import a WireGuard client profile into a Merlin slot.",
+		schema(`"unit":{"type":"integer"},"description":{"type":"string"},"private_key":{"type":"string"},"peer_public_key":{"type":"string"},"preshared_key":{"type":"string"},"endpoint":{"type":"string"},"endpoint_port":{"type":"integer"},"address":{"type":"string"},"allowed_ips":{"type":"array","items":{"type":"string"}},"dns":{"type":"string"},"mtu":{"type":"integer"},"keepalive":{"type":"integer"},"nat":{"type":"boolean"},"kill_switch":{"type":"boolean"}`),
+		true, handleVPNWireGuardImport)
+	s.register("vpn.up", "Bring a named VPN profile up (e.g. wgc1).",
+		schema(`"name":{"type":"string"}`), true, handleVPNUp)
+	s.register("vpn.down", "Bring a named VPN profile down.",
+		schema(`"name":{"type":"string"}`), true, handleVPNDown)
+
+	s.register("firewall.rules.set", "Append a raw firewall rule.",
+		schema(`"table":{"type":"string"},"chain":{"type":"string"},"rule":{"type":"string"}`),
+		true, handleFirewallRulesSet)
+	s.register("firewall.rules.delete", "Delete a matching firewall rule.",
+		schema(`"table":{"type":"string"},"chain":{"type":"string"},"rule":{"type":"string"}`),
+		true, handleFirewallRulesDelete)
+
+	s.register("route.policy.list", "List policy routes (device → WAN/VPN steering).", schema(""), false, handlePolicyList)
+	s.register("route.policy.set", "Create or update a policy route.",
+		schema(`"id":{"type":"string"},"description":{"type":"string"},"source":{"type":"string"},"interface":{"type":"string"},"kill_switch":{"type":"boolean"},"enabled":{"type":"boolean"}`),
+		true, handlePolicySet)
+	s.register("route.policy.delete", "Delete a policy route by id.",
+		schema(`"id":{"type":"string"}`), true, handlePolicyDelete)
 }
 
 // Serve runs the JSON-RPC loop reading requests from r and writing responses

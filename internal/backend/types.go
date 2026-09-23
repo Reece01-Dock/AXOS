@@ -152,3 +152,95 @@ type VPNTunnel struct {
 	LocalAddress string    `json:"local_address,omitempty"`
 	Peers        []VPNPeer `json:"peers,omitempty"`
 }
+
+// DiagResult is the typed output of a from-router diagnostic command.
+type DiagResult struct {
+	Command  string        `json:"command"`
+	OK       bool          `json:"ok"`
+	Output   string        `json:"output"`
+	Duration time.Duration `json:"duration"`
+}
+
+// IperfOpts configures a from-router iperf3 run.
+type IperfOpts struct {
+	Mode     string `json:"mode"` // "client" or "server"
+	Target   string `json:"target,omitempty"`
+	Port     int    `json:"port,omitempty"`
+	Seconds  int    `json:"seconds,omitempty"`
+	Reverse  bool   `json:"reverse,omitempty"`
+	UDP      bool   `json:"udp,omitempty"`
+}
+
+// PerfResult summarises a bandwidth / latency measurement.
+type PerfResult struct {
+	Tool     string        `json:"tool"`
+	OK       bool          `json:"ok"`
+	Summary  string        `json:"summary"`
+	Output   string        `json:"output,omitempty"`
+	Duration time.Duration `json:"duration"`
+}
+
+// DNSInfo is the router's DNS configuration (upstreams + optional DoT).
+type DNSInfo struct {
+	WANUpstreams []string `json:"wan_upstreams,omitempty"`
+	LANUpstreams []string `json:"lan_upstreams,omitempty"`
+	DoTEnabled   bool     `json:"dot_enabled"`
+	DoTProfile   string   `json:"dot_profile,omitempty"`
+	DoTRules     string   `json:"dot_rules,omitempty"`
+}
+
+// DHCPReservation is a static DHCP host mapping.
+type DHCPReservation struct {
+	MAC      string `json:"mac"`
+	IP       string `json:"ip"`
+	Hostname string `json:"hostname,omitempty"`
+}
+
+// QoSInfo is a summary of Adaptive QoS / Cake state.
+type QoSInfo struct {
+	Enabled bool   `json:"enabled"`
+	Mode    string `json:"mode,omitempty"`
+	Method  int    `json:"method,omitempty"`
+	ObwKbps string `json:"obw_kbps,omitempty"`
+	IbwKbps string `json:"ibw_kbps,omitempty"`
+}
+
+// VPNProfile is a configured VPN client slot (no secrets).
+type VPNProfile struct {
+	Name        string `json:"name"` // e.g. "wgc1", "ovpnc1"
+	Type        string `json:"type"` // "wireguard", "openvpn"
+	Description string `json:"description,omitempty"`
+	Enabled     bool   `json:"enabled"`
+	Endpoint    string `json:"endpoint,omitempty"`
+	KillSwitch  bool   `json:"kill_switch,omitempty"`
+}
+
+// WireGuardImport is the input for creating/updating a WG client slot.
+// PrivateKey is accepted for import then stored only in the dedicated
+// secrets path / nvram — never returned by VPNProfiles / VPNStatus.
+type WireGuardImport struct {
+	Unit         int      `json:"unit"` // 1..5
+	Description  string   `json:"description,omitempty"`
+	PrivateKey   string   `json:"private_key"`
+	PeerPublicKey string  `json:"peer_public_key"`
+	PresharedKey string   `json:"preshared_key,omitempty"`
+	Endpoint     string   `json:"endpoint"`
+	EndpointPort int      `json:"endpoint_port"`
+	Address      string   `json:"address"` // tunnel local CIDR
+	AllowedIPs   []string `json:"allowed_ips"`
+	DNS          string   `json:"dns,omitempty"`
+	MTU          int      `json:"mtu,omitempty"`
+	Keepalive    int      `json:"keepalive,omitempty"`
+	Nat          bool     `json:"nat"`
+	KillSwitch   bool     `json:"kill_switch"`
+}
+
+// PolicyRoute steers a device (or subnet) to WAN or a VPN client.
+type PolicyRoute struct {
+	ID          string `json:"id"`
+	Description string `json:"description,omitempty"`
+	Source      string `json:"source"` // MAC, IP, or CIDR
+	Interface   string `json:"interface"` // "wan", "wgc1", "ovpnc1", ...
+	KillSwitch  bool   `json:"kill_switch,omitempty"`
+	Enabled     bool   `json:"enabled"`
+}

@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -50,6 +51,10 @@ type Server struct {
 	// /v1/footprint* routes respond 501, matching the Supervisor convention
 	// above.
 	Footprint *footprint.Store
+	// uiFS, when set (see SetUI), serves the Phase 7 web UI at GET / and
+	// GET /ui/*. Nil means those routes 404 — /v1/* and /healthz are
+	// unaffected either way.
+	uiFS fs.FS
 
 	local *rollbackctl.Local // reuses the same snapshot-then-arm composition Local implements
 	mux   *http.ServeMux
@@ -115,6 +120,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /v1/supervisor/services/{name}/stop", s.handleServiceStop)
 	s.mux.HandleFunc("POST /v1/supervisor/services/{name}/restart", s.handleServiceRestart)
 	s.mux.HandleFunc("GET /v1/supervisor/services/{name}/logs", s.handleServiceLogs)
+
+	s.registerM3Routes()
+	s.registerUIRoutes()
 }
 
 func (s *Server) requireSupervisor(w http.ResponseWriter) bool {

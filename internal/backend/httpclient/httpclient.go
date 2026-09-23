@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/reece01-dock/axos/internal/backend"
@@ -209,6 +210,118 @@ func (c *Client) ListBackups(ctx context.Context) ([]backend.BackupInfo, error) 
 	var v []backend.BackupInfo
 	err := c.do(ctx, http.MethodGet, "/v1/backups", nil, &v)
 	return v, err
+}
+
+// --- Milestone 3 -------------------------------------------------------
+
+func (c *Client) Ping(ctx context.Context, host string, count int) (backend.DiagResult, error) {
+	var v backend.DiagResult
+	err := c.do(ctx, http.MethodPost, "/v1/diag/ping", map[string]interface{}{
+		"host": host, "count": count,
+	}, &v)
+	return v, err
+}
+
+func (c *Client) Traceroute(ctx context.Context, host string, maxHops int) (backend.DiagResult, error) {
+	var v backend.DiagResult
+	err := c.do(ctx, http.MethodPost, "/v1/diag/traceroute", map[string]interface{}{
+		"host": host, "max_hops": maxHops,
+	}, &v)
+	return v, err
+}
+
+func (c *Client) DNSLookup(ctx context.Context, name string) (backend.DiagResult, error) {
+	var v backend.DiagResult
+	err := c.do(ctx, http.MethodPost, "/v1/diag/dns", map[string]interface{}{"name": name}, &v)
+	return v, err
+}
+
+func (c *Client) PortCheck(ctx context.Context, host string, port int) (backend.DiagResult, error) {
+	var v backend.DiagResult
+	err := c.do(ctx, http.MethodPost, "/v1/diag/port", map[string]interface{}{
+		"host": host, "port": port,
+	}, &v)
+	return v, err
+}
+
+func (c *Client) Iperf3(ctx context.Context, opts backend.IperfOpts) (backend.PerfResult, error) {
+	var v backend.PerfResult
+	err := c.do(ctx, http.MethodPost, "/v1/perf/iperf3", opts, &v)
+	return v, err
+}
+
+func (c *Client) DNSConfig(ctx context.Context) (backend.DNSInfo, error) {
+	var v backend.DNSInfo
+	err := c.do(ctx, http.MethodGet, "/v1/dns", nil, &v)
+	return v, err
+}
+
+func (c *Client) SetDNSConfig(ctx context.Context, cfg backend.DNSInfo) error {
+	return c.do(ctx, http.MethodPost, "/v1/dns", cfg, nil)
+}
+
+func (c *Client) DHCPReservations(ctx context.Context) ([]backend.DHCPReservation, error) {
+	var v []backend.DHCPReservation
+	err := c.do(ctx, http.MethodGet, "/v1/dhcp/reservations", nil, &v)
+	return v, err
+}
+
+func (c *Client) SetDHCPReservation(ctx context.Context, r backend.DHCPReservation) error {
+	return c.do(ctx, http.MethodPost, "/v1/dhcp/reservations", r, nil)
+}
+
+func (c *Client) DeleteDHCPReservation(ctx context.Context, mac string) error {
+	return c.do(ctx, http.MethodDelete, "/v1/dhcp/reservations/"+url.PathEscape(mac), nil, nil)
+}
+
+func (c *Client) QoSStatus(ctx context.Context) (backend.QoSInfo, error) {
+	var v backend.QoSInfo
+	err := c.do(ctx, http.MethodGet, "/v1/qos", nil, &v)
+	return v, err
+}
+
+func (c *Client) SetQoSEnable(ctx context.Context, enabled bool) error {
+	return c.do(ctx, http.MethodPost, "/v1/qos", map[string]interface{}{"enabled": enabled}, nil)
+}
+
+func (c *Client) VPNProfiles(ctx context.Context) ([]backend.VPNProfile, error) {
+	var v []backend.VPNProfile
+	err := c.do(ctx, http.MethodGet, "/v1/vpn/profiles", nil, &v)
+	return v, err
+}
+
+func (c *Client) ImportWireGuard(ctx context.Context, p backend.WireGuardImport) error {
+	return c.do(ctx, http.MethodPost, "/v1/vpn/wireguard/import", p, nil)
+}
+
+func (c *Client) VPNUp(ctx context.Context, name string) error {
+	return c.do(ctx, http.MethodPost, "/v1/vpn/"+url.PathEscape(name)+"/up", nil, nil)
+}
+
+func (c *Client) VPNDown(ctx context.Context, name string) error {
+	return c.do(ctx, http.MethodPost, "/v1/vpn/"+url.PathEscape(name)+"/down", nil, nil)
+}
+
+func (c *Client) FirewallApply(ctx context.Context, rule backend.FirewallRule) error {
+	return c.do(ctx, http.MethodPost, "/v1/firewall/apply", rule, nil)
+}
+
+func (c *Client) FirewallDelete(ctx context.Context, rule backend.FirewallRule) error {
+	return c.do(ctx, http.MethodPost, "/v1/firewall/delete", rule, nil)
+}
+
+func (c *Client) PolicyRoutes(ctx context.Context) ([]backend.PolicyRoute, error) {
+	var v []backend.PolicyRoute
+	err := c.do(ctx, http.MethodGet, "/v1/policy", nil, &v)
+	return v, err
+}
+
+func (c *Client) SetPolicyRoute(ctx context.Context, r backend.PolicyRoute) error {
+	return c.do(ctx, http.MethodPost, "/v1/policy", r, nil)
+}
+
+func (c *Client) DeletePolicyRoute(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodDelete, "/v1/policy/"+url.PathEscape(id), nil, nil)
 }
 
 var _ backend.RouterBackend = (*Client)(nil)
