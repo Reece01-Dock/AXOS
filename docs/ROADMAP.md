@@ -12,55 +12,62 @@ but **not yet run against real router hardware** · `(scripted)` tooling
 exists but hasn't been executed/verified at all yet.
 
 `[s]` is a real, meaningful bar (see `docs/development.md` "Status: what's
-actually verified" for exactly what was run), but it is not `[x]` — nothing
-in this repo has touched a GT-AX6000 yet, and every hardware-specific
-assumption in `internal/backend/asuswrt` remains explicitly `(verify)`
-until one does.
+actually verified" for exactly what was run), but it is not `[x]`. As of
+2026-09-23, Milestone 1 stock Merlin is flashed and verified on a real
+GT-AX6000 (see flash log in `docs/flashing-and-recovery.md`). Remaining
+`[s]` / `(verify)` marks apply to AXOS-specific code and asuswrt backend
+assumptions that have not yet been driven end-to-end on that hardware.
 
 ## Milestone 1 — Prove the build → flash → recover loop
 
 The single most important milestone. No AXOS functionality before this is green.
 
-**Hard blocker, stated plainly:** steps 3–12 and 14–16 require a physical
-GT-AX6000 — flashing it, watching it boot, confirming Wi-Fi actually
-broadcasts on both bands, checking real Ethernet link speeds, and pressing
-its physical recovery-mode button are not things any amount of code or
-sandboxed automation can substitute for. No environment this project has had
-access to so far includes one. What follows is exactly what *was* checked —
-real verification against the actual upstream source, not speculation —
-and exactly where it stops.
+**Hardware status (2026-09-23):** Milestone 1 complete on a physical GT-AX6000
+at `192.168.50.1` — stock Merlin wifi6 flashed and verified, then AXOS
+login-title marker rebuilt/flashed/verified (`ASUS Login (AXOS)`). Remaining
+optional: cable-linked 2.5GbE retest (step 6).
 
-- [s] 1. Build Asuswrt-Merlin from source for GT-AX6000 — a full `make
-      gt-ax6000` completed with exit code 0 in this development sandbox
-      (see below for the real disk/patch work that got it there). Not
-      `[x]`: this is a sandbox build, not one run on independent hardware.
-- [s] 2. Produce a firmware image (`.w` / `.pkgtb`) — real output exists:
-      `GT-AX6000_3004_388.9_0_nand_squashfs.pkgtb`, 63,261,708 bytes,
-      sha256 `8bcae611633e1fafcd2fdf9d3356ed92ffc383c7a170c749552865fcb4bb00b3`
-      (see the manifest alongside it in `firmware/out/` for the exact
-      refs). Not `[x]`: producing bytes isn't the same as those bytes
-      being a correct, flashable image — that's what step 3 checks.
-- [ ] 3. Flash it via the stock ASUS web UI — blocked on physical hardware
-- [ ] 4. Router boots — blocked on physical hardware
-- [ ] 5. 1GbE Ethernet works — blocked on physical hardware
-- [ ] 6. Both 2.5GbE ports work — blocked on physical hardware
-- [ ] 7. 2.4 GHz Wi-Fi works — blocked on physical hardware
-- [ ] 8. 5 GHz Wi-Fi works — blocked on physical hardware
-- [ ] 9. ASUS web UI works — blocked on physical hardware
-- [ ] 10. SSH works — blocked on physical hardware
-- [ ] 11. Recovery mode verified (bootloader rescue + firmware restoration — do this
-       **before** flashing anything custom; see `docs/flashing-and-recovery.md`)
-       — blocked on physical hardware
-- [ ] 12. Create and store a settings + JFFS backup — blocked on physical hardware
-- [s] 13. Make one harmless, visible source modification — **built into the
-      real image**, not just written: `firmware/patches/0001-axos-login-title-marker.patch`
-      (adds " (AXOS)" to the web UI login page's browser-tab title) is one
-      of the 13 patches baked into the step-2 image (`apply_patches: true`
-      in its manifest). Not `[x]`: nobody has loaded that web UI on a real
-      router yet to see the title — see step 16.
-- [ ] 14. Rebuild — blocked on step 2
-- [ ] 15. Flash again — blocked on physical hardware
-- [ ] 16. Verify the modification is visible on the router — blocked on physical hardware
+- [x] 1. Build Asuswrt-Merlin from source for GT-AX6000 — stock tree
+      `firmware/src-stock/` on branch `3006.102-wifi6`
+      (`d832d71c8b6d32cc5ae57c0cfbbe4d5249592fea`), plain `make gt-ax6000`,
+      exit 0. (Earlier sandbox work on `3004.388.9` + AXOS patches is
+      superseded; that pin lacks GT-AX6000 prebuilds and is not the
+      upstream build-all branch for this model.)
+- [x] 2. Produce a firmware image (`.w` / `.pkgtb`) —
+      `firmware/out-stock/GT-AX6000_3006_102.9_beta1_nand_squashfs.pkgtb`,
+      70,443,084 bytes, sha256
+      `2d8c403ea2252e13bbe857450fc10778894b9c17b0d7c156a54621f2d500b85b`.
+- [x] 3. Flash it via the stock ASUS web UI — uploaded over
+      `http://192.168.50.1/upgrade.cgi` from ASUS stock
+      `3.0.0.6.102_37436`; router rebooted and came back.
+- [x] 4. Router boots — web UI + SSH after flash.
+- [x] 5. 1GbE Ethernet works — `eth1` up at 1G; LAN at `192.168.50.1`.
+- [ ] 6. Both 2.5GbE ports work — PHY present (`eth5` advertises 2.5G);
+       **no cable linked** at check time (link down). Retest with cable.
+- [x] 7. 2.4 GHz Wi-Fi works — `wl` on eth6: SSID `Reece-Net`, ch 2.
+- [x] 8. 5 GHz Wi-Fi works — `wl` on eth7: SSID `Reece-Net`, ch 36/80.
+- [x] 9. ASUS web UI works — login + authenticated `appGet.cgi`.
+- [x] 10. SSH works — `sshd_enable=1`, port 22, password login as `Reece`;
+       `uname` reports `ASUSWRT-Merlin`.
+- [x] 11. Recovery mode verified (bootloader rescue + firmware restoration —
+       **before** this Merlin flash the unit was recovered from a bad
+       custom image via ASUS Firmware Restoration — recorded by operator).
+       Formal re-document of LED/button procedure still optional polish.
+- [x] 12. Create and store a settings + JFFS backup —
+      `/home/reece/AXOS-backups/pre-axos-marker-20260923T194612Z/`
+      (`nvram-full.txt`, `settings.cfg` via `nvram save`, `jffs.tar.gz`).
+- [x] 13. Make one harmless, visible source modification —
+      **only** `0001-axos-login-title-marker.patch` on `3006.102-wifi6`.
+- [x] 14. Rebuild — `APPLY_PATCHES=1` image
+      `firmware/out/GT-AX6000_3006_102.9_beta1_nand_squashfs.pkgtb`,
+      70,443,084 bytes, sha256
+      `193be109f44987fb52486613cb4c0b1fa0ebc607290005c8d822386df1ca84e6`
+      (differs from stock `2d8c403e…`).
+- [x] 15. Flash again — web UI `upgrade.cgi` from running Merlin stock
+      wifi6; router rebooted.
+- [x] 16. Verify the modification is visible on the router —
+      `Main_Login.asp` `<title>` is **`ASUS Login (AXOS)`**; SSH up;
+      `uname` build time `Wed Sep 23 19:46:41 UTC 2026`.
 
 ### What was actually verified this session (real, against real upstream source)
 

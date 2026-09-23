@@ -19,7 +19,7 @@ RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y --no-in
     libncurses5-dev libslang2 libssl-dev libtool libtool-bin libxml2-dev \
     libxml-parser-perl make patch perl pkg-config python2 python3 \
     python-is-python2 rsync ruby sed sudo texinfo unzip uuid-dev wget xxd \
-    zip zlib1g-dev \
+    zip zlib1g-dev gengetopt \
     && rm -rf /var/lib/apt/lists/*
 
 # The HND build expects toolchains under /opt/toolchains; build.sh bind-mounts

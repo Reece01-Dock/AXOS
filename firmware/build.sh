@@ -77,6 +77,7 @@ BUILD_SUBDIR="release/src-rt-5.04axhnd.675x"
 
 mkdir -p "$CCACHE_DIR_HOST"
 
+BUILD_STARTED_EPOCH="$(date +%s)"
 echo "==> Running build inside container (this can take 45-90+ minutes, longer still single-threaded)"
 docker run --rm \
   -v "$MERLIN_SRC":/build/asuswrt-merlin.ng \
@@ -92,16 +93,29 @@ docker run --rm \
   bash /entrypoint.sh
 
 echo "==> Locating build output"
-# tools/build-all looks specifically in image/ and matches
-# *_nand_squashfs.pkgtb for this model (confirmed against upstream's own
-# build_fw() function) — search there first, then fall back to a broader
-# scan in case the layout differs for the pinned ref actually checked out.
-found=$(find "$MERLIN_SRC/$BUILD_SUBDIR/image" -maxdepth 1 -iname "*_nand_squashfs.pkgtb" -print -quit 2>/dev/null || true)
+# On wifi6/HND the flashable *_nand_squashfs.pkgtb lands under
+# targets/<profile>/ (and a copy under bootloaders/obj/binaries/), not
+# always under image/. Prefer the newest match by mtime so a leftover from
+# a prior stock build is not mistaken for this run's output.
+found=$(find "$MERLIN_SRC/$BUILD_SUBDIR" \
+  \( -path "*/image/*_nand_squashfs.pkgtb" -o -path "*/targets/*/*_nand_squashfs.pkgtb" \) \
+  ! -name '*_loader.pkgtb' \
+  -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)
 if [ -z "$found" ]; then
-  found=$(find "$MERLIN_SRC" -maxdepth 6 -iname "*GT-AX6000*" \( -iname "*.w" -o -iname "*.pkgtb" -o -iname "*.trx" \) -print -quit || true)
+  found=$(find "$MERLIN_SRC" -maxdepth 8 -iname '*GT-AX6000*_nand_squashfs.pkgtb' \
+    ! -name '*_loader.pkgtb' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)
 fi
 if [ -n "$found" ]; then
+  # Reject stale artifacts that predate this build invocation.
+  if [ -n "${BUILD_STARTED_EPOCH:-}" ]; then
+    found_mtime="$(stat -c %Y "$found")"
+    if [ "$found_mtime" -lt "$BUILD_STARTED_EPOCH" ]; then
+      echo "error: newest image $found is older than this build start — make did not produce a new pkgtb" >&2
+      exit 1
+    fi
+  fi
   image_name="$(basename "$found")"
+  mkdir -p "$OUT_DIR"
   cp -v "$found" "$OUT_DIR/"
   echo "==> Output copied to $OUT_DIR/$image_name"
 
@@ -121,25 +135,33 @@ if [ -n "$found" ]; then
   else
     echo "    warning: $pinned_file not found (did you run setup-sources.sh?) — manifest refs will read 'unknown'"
   fi
+  # Prefer live tree commit when building from src-stock / a dirty worktree.
+  live_commit="$(git -C "$MERLIN_SRC" rev-parse HEAD 2>/dev/null || echo "$merlin_commit")"
+  patch_list="none"
+  if [ "$APPLY_PATCHES" = "1" ]; then
+    patch_list="$(find "$HERE/patches" -maxdepth 1 -name '*.patch' -printf '%f,' 2>/dev/null | sed 's/,$//')"
+    [ -n "$patch_list" ] || patch_list="none"
+  fi
   manifest_path="$OUT_DIR/$image_name.manifest.json"
   cat > "$manifest_path" <<EOF
 {
   "image": "$image_name",
   "sha256": "$image_sha256",
+  "size_bytes": $(stat -c%s "$OUT_DIR/$image_name"),
   "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "apply_patches": $([ "$APPLY_PATCHES" = "1" ] && echo true || echo false),
+  "axos_patches": "$patch_list",
   "merlin_ref": "$merlin_ref",
-  "merlin_commit": "$merlin_commit",
+  "merlin_commit": "$live_commit",
   "toolchains_ref": "$toolchains_ref",
-  "toolchains_commit": "$toolchains_commit"
+  "toolchains_commit": "$toolchains_commit",
+  "source_tree": "$MERLIN_SRC"
 }
 EOF
   echo "==> Manifest written to $manifest_path"
 else
-  echo "warning: could not locate a firmware image automatically — inspect the"
-  echo "         build tree's release/ or image/ output directory by hand and"
-  echo "         update this script's search once the real path is known."
-  echo "         (no hash or manifest was generated, since there is no artifact yet)"
+  echo "error: could not locate a firmware image under image/ or targets/" >&2
+  exit 1
 fi
 
 echo "==> Build script finished. Record the resulting refs in docs/ROADMAP.md / flashing-and-recovery.md before flashing."

@@ -67,4 +67,6 @@ the safety story — keep it honest.
 
 | Date | Image | Built from (repo ref / patches) | Result |
 |---|---|---|---|
+| 2026-09-23 | `GT-AX6000_3006_102.9_beta1_nand_squashfs.pkgtb` (70,443,084 B, sha256 `2d8c403ea2252e13bbe857450fc10778894b9c17b0d7c156a54621f2d500b85b`) | Stock Merlin `3006.102-wifi6` @ `d832d71c8b…`, **no AXOS patches**; flashed via web UI from ASUS stock `3.0.0.6.102_37436` | **PASS** — boots, web UI, SSH (LAN, port 22), WAN PPPoE + internet, both Wi-Fi bands up (`Reece-Net`), flow cache L2/L3 on, privacy CGI present in `httpd`. 2.5GbE PHY present (eth5) but no cable linked at flash time. |
+| 2026-09-23 | `GT-AX6000_3006_102.9_beta1_nand_squashfs.pkgtb` (70,443,084 B, sha256 `193be109f44987fb52486613cb4c0b1fa0ebc607290005c8d822386df1ca84e6`) | Same wifi6 commit + **only** `0001-axos-login-title-marker.patch`; flashed via web UI from prior stock Merlin | **PASS** — boots, SSH, login tab title **`ASUS Login (AXOS)`** (M1 step 16). Backup at `AXOS-backups/pre-axos-marker-20260923T194612Z/`. |
 | — | — | — | — |

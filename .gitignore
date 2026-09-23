@@ -4,6 +4,10 @@
 # exists locally after `git submodule update --init` and is managed by
 # each submodule's own .git, not this repo's ignore rules.
 /firmware/out/
+/firmware/out-stock/
+# Separate pristine Merlin tree for stock (unpatched) baseline builds.
+# Not a submodule — local clone of an upstream release tag.
+/firmware/src-stock/
 /firmware/.sources-pinned
 # axos-build.sh's own state (lock, last-run.json, per-run logs) and the
 # persistent ccache directory build.sh bind-mounts into the container —

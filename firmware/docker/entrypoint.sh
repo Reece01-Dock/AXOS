@@ -120,53 +120,34 @@ echo "== building GT-AX6000 (jobs: ${BUILD_JOBS:-1}) =="
 # FWMODEL="gt-ax6000" — note the dash; "gtax6000" (no dash) is not a valid
 # target and was an earlier, unverified guess in this script).
 #
-# Eight ASUS features (UUPLUGIN/GEARUPPLUGIN cloud-account plugins, TPVPN,
-# AMAS_ADTBW, PRELINK, BRCM_HOSTAPD, RGBLED, BT_CONN) default off in both
-# release/src/router/config/config.in and config_base, and GT-AX6000's own
-# config fragment (targets/94912GW/94912GW.GT-AX6000) never turns any of
-# them on — yet leaving them enabled in the generated build state pulls in
-# prebuild/*.o objects and whole subdirectories this Merlin release
-# genuinely doesn't ship for GT-AX6000 (see docs/ROADMAP.md and
-# firmware/patches/README.md for the full per-flag trace).
+# Default: plain `make gt-ax6000`, matching upstream tools/build-all and the
+# verified stock wifi6 baseline (docs/stock-merlin-gt-ax6000.md).
 #
-# RTCONFIG_X=n alone is NOT enough (confirmed via a real build that got
-# past the Makefile's OBJS/CFLAGS layer and still crashed on all eight
-# features anyway): release/src-rt/Makefile's RouterOptions config
-# generator unconditionally force-writes RTCONFIG_X=y into the generated
-# .config whenever a same-named *bare* variable (UUPLUGIN, GEARUPPLUGIN,
-# TPVPN, AMAS_ADTBW, PRELINK, BRCM_HOSTAPD, RGBLED, BT_CONN — no
-# RTCONFIG_ prefix) is "y", which it is from this model's own pristine
-# top-level .config. Passing the bare variable too short-circuits that
-# rewrite at its source.
-#
-# All sixteen overrides below (both forms of all eight flags) must be
-# truly *empty* (VAR=), not =n: this tree mixes two Makefile idioms for
-# reading these flags. `ifeq ($(RTCONFIG_X),y)` treats "n" and empty the
-# same (both != "y"), but `$(if $(RTCONFIG_X),...)` / `$(and ...)` /
-# `$(or ...)` (e.g. shared/Makefile's WireGuard-helper gate,
-# `$(or $(RTCONFIG_VPN_FUSION),$(RTCONFIG_TPVPN),...)`) treat ANY
-# non-empty string, "n" included, as true — so RTCONFIG_TPVPN=n was
-# silently dropping vpn_utils.o regardless of WireGuard's own real state.
-# Confirmed via a real build: =n produced undefined WireGuard-helper
-# references at link time; empty does not.
+# LEGACY_3004_RTCONFIG_OVERRIDES=1 re-enables the old empty-out of eight
+# ASUS feature flags (UUPLUGIN, GEARUPPLUGIN, TPVPN, AMAS_ADTBW, PRELINK,
+# BRCM_HOSTAPD, RGBLED, BT_CONN). That was required on tag 3004.388.9,
+# which lacked GT-AX6000 prebuilds those flags pull in. On 3006.102-wifi6
+# those prebuilds exist; forcing BRCM_HOSTAPD= empty breaks rc's link
+# against -lsys_util/-lgen_util (confirmed 2026-09-23). Do not use the
+# legacy overrides on wifi6.
 #
 # -j "${BUILD_JOBS:-1}": defaults to strictly serial. This SDK's tree hit
-# two real parallel-build races under -j>1 (release/src/router/Makefile's
-# clean-build vs. fsbuild/ $(obj-y), fixed by patch 0008's .NOTPARALLEL;
-# and router-sysdep/wlan/scripts needing nvramUpdate from the sibling
-# nvram/ target before it's built, NOT yet patched) — override BUILD_JOBS
-# only once you've dealt with both, or are prepared to hit the second.
-# Also hardcodes its own `make -j 9` internally in the kernel-build phase
-# (release/src-rt/Makefile ~line 1226-1227), independent of this flag.
-make -j "${BUILD_JOBS:-1}" gt-ax6000 \
-  RTCONFIG_UUPLUGIN= UUPLUGIN= \
-  RTCONFIG_GEARUPPLUGIN= GEARUPPLUGIN= \
-  RTCONFIG_TPVPN= TPVPN= \
-  RTCONFIG_AMAS_ADTBW= AMAS_ADTBW= \
-  RTCONFIG_PRELINK= PRELINK= \
-  RTCONFIG_BRCM_HOSTAPD= BRCM_HOSTAPD= \
-  RTCONFIG_RGBLED= RGBLED= \
-  RTCONFIG_BT_CONN= BT_CONN=
+# parallel-build races under -j>1 (see patch 0008 / docs/incremental-builds.md).
+MAKE_ARGS=( -j "${BUILD_JOBS:-1}" gt-ax6000 )
+if [ "${LEGACY_3004_RTCONFIG_OVERRIDES:-0}" = "1" ]; then
+  echo "== LEGACY_3004_RTCONFIG_OVERRIDES=1 — emptying eight feature flags =="
+  MAKE_ARGS+=(
+    RTCONFIG_UUPLUGIN= UUPLUGIN=
+    RTCONFIG_GEARUPPLUGIN= GEARUPPLUGIN=
+    RTCONFIG_TPVPN= TPVPN=
+    RTCONFIG_AMAS_ADTBW= AMAS_ADTBW=
+    RTCONFIG_PRELINK= PRELINK=
+    RTCONFIG_BRCM_HOSTAPD= BRCM_HOSTAPD=
+    RTCONFIG_RGBLED= RGBLED=
+    RTCONFIG_BT_CONN= BT_CONN=
+  )
+fi
+make "${MAKE_ARGS[@]}"
 
 echo "== ccache stats after build (compare hit rate against the 'before' run above) =="
 ccache -s || true
