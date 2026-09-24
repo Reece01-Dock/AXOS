@@ -204,3 +204,98 @@ func TestSetPolicyRoute_UnknownIDIsError(t *testing.T) {
 		t.Fatal("want error for unknown id")
 	}
 }
+
+// nvramFake answers "nvram get" from a map and records every call.
+func nvramFake(nv map[string]string) *fakeRunner {
+	return &fakeRunner{respond: func(name string, args []string) (string, string, int) {
+		if name == "nvram" && len(args) == 2 && args[0] == "get" {
+			return nv[args[1]], "", 0
+		}
+		return "", "", 0
+	}}
+}
+
+func hasCall(calls []string, want string) bool {
+	for _, c := range calls {
+		if c == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestSetDNSConfig_ManualWANWritesPersistentKeysAndRestartsWAN(t *testing.T) {
+	r := nvramFake(map[string]string{"wan0_dnsenable_x": "1", "wan0_dns": "81.139.56.100"})
+	b := newTestBackend(t, r)
+	err := b.SetDNSConfig(context.Background(), backend.DNSInfo{WANUpstreams: []string{"1.1.1.1", "1.0.0.1"}})
+	if err != nil {
+		t.Fatalf("SetDNSConfig: %v", err)
+	}
+	for _, want := range []string{
+		"nvram set wan0_dnsenable_x=0", "nvram set wan0_dns1_x=1.1.1.1", "nvram set wan0_dns2_x=1.0.0.1",
+		"nvram commit", "service restart_wan_if 0",
+	} {
+		if !hasCall(r.calls, want) {
+			t.Errorf("missing %q in %v", want, r.calls)
+		}
+	}
+	for _, c := range r.calls {
+		if strings.HasPrefix(c, "nvram set wan0_dns=") {
+			t.Errorf("runtime key wan0_dns must not be written: %s", c)
+		}
+	}
+}
+
+func TestSetDNSConfig_LANOnlyRestartsDnsmasq(t *testing.T) {
+	r := nvramFake(map[string]string{"wan0_dnsenable_x": "1", "wan0_dns": "81.139.56.100"})
+	b := newTestBackend(t, r)
+	err := b.SetDNSConfig(context.Background(), backend.DNSInfo{LANUpstreams: []string{"192.168.50.2"}})
+	if err != nil {
+		t.Fatalf("SetDNSConfig: %v", err)
+	}
+	if !hasCall(r.calls, "service restart_dnsmasq") || hasCall(r.calls, "service restart_wan_if 0") {
+		t.Fatalf("calls = %v", r.calls)
+	}
+}
+
+func TestSetDNSConfig_RejectsBadInput(t *testing.T) {
+	b := newTestBackend(t, nvramFake(nil))
+	if err := b.SetDNSConfig(context.Background(), backend.DNSInfo{WANUpstreams: []string{"1.1.1.1", "8.8.8.8", "9.9.9.9"}}); err == nil {
+		t.Error("3 WAN servers should be rejected")
+	}
+	if err := b.SetDNSConfig(context.Background(), backend.DNSInfo{WANUpstreams: []string{"dns.google"}}); err == nil {
+		t.Error("hostname should be rejected")
+	}
+}
+
+func TestDNSInfoFromNVRAM_Manual(t *testing.T) {
+	nv := map[string]string{"wan0_dnsenable_x": "0", "wan0_dns1_x": "9.9.9.9", "wan0_dns": "81.139.56.100"}
+	info := dnsInfoFromNVRAM(func(k string) string { return nv[k] })
+	if info.WANDNSAuto || len(info.WANUpstreams) != 1 || info.WANUpstreams[0] != "9.9.9.9" {
+		t.Fatalf("info = %+v", info)
+	}
+}
+
+func TestSetQoSEnable_Applies(t *testing.T) {
+	r := nvramFake(nil)
+	b := newTestBackend(t, r)
+	if err := b.SetQoSEnable(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"nvram set qos_enable=1", "nvram commit", "service restart_qos", "service restart_firewall"} {
+		if !hasCall(r.calls, want) {
+			t.Errorf("missing %q in %v", want, r.calls)
+		}
+	}
+}
+
+func TestSetDHCPReservation_RestartsDnsmasq(t *testing.T) {
+	r := nvramFake(map[string]string{"dhcp_staticlist": ""})
+	b := newTestBackend(t, r)
+	if err := b.SetDHCPReservation(context.Background(), backend.DHCPReservation{MAC: "aa:bb:cc:dd:ee:ff", IP: "192.168.50.20"}); err != nil {
+		t.Fatal(err)
+	}
+	if !hasCall(r.calls, "service restart_dnsmasq") {
+		t.Fatalf("calls = %v", r.calls)
+	}
+}

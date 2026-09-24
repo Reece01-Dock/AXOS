@@ -88,6 +88,7 @@ func (b *Backend) SetDNSConfig(_ context.Context, cfg backend.DNSInfo) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.dns = cloneDNS(cfg)
+	b.dns.WANDNSAuto = len(cfg.WANUpstreams) == 0
 	return nil
 }
 

@@ -3,6 +3,7 @@ package asuswrt
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -183,57 +184,108 @@ func (b *Backend) DNSConfig(ctx context.Context) (backend.DNSInfo, error) {
 	}), nil
 }
 
+// SetDNSConfig writes the same nvram keys Merlin's WAN and DHCP pages do,
+// then applies them the same way: WAN DNS / DoT changes run
+// restart_wan_if 0 (a brief WAN reconnect), LAN (DHCP) DNS changes run
+// restart_dnsmasq. wan0_dns itself is runtime state the WAN client
+// rewrites on every reconnect, so it is never written.
 func (b *Backend) SetDNSConfig(ctx context.Context, cfg backend.DNSInfo) error {
-	wan := strings.Join(cfg.WANUpstreams, " ")
-	if err := b.nvramSet(ctx, "wan0_dns", wan); err != nil {
+	if len(cfg.WANUpstreams) > 2 {
+		return fmt.Errorf("asuswrt: at most 2 WAN DNS servers are supported, got %d", len(cfg.WANUpstreams))
+	}
+	for _, ip := range append(append([]string{}, cfg.WANUpstreams...), cfg.LANUpstreams...) {
+		if net.ParseIP(strings.TrimSpace(ip)) == nil {
+			return fmt.Errorf("asuswrt: DNS server %q is not an IP address", ip)
+		}
+	}
+	cur, err := b.DNSConfig(ctx)
+	if err != nil {
 		return err
 	}
-	if err := b.nvramSet(ctx, "wan_dns", wan); err != nil {
-		return err
+
+	auto, dns1, dns2 := "1", "", ""
+	if len(cfg.WANUpstreams) > 0 {
+		auto, dns1 = "0", strings.TrimSpace(cfg.WANUpstreams[0])
+	}
+	if len(cfg.WANUpstreams) > 1 {
+		dns2 = strings.TrimSpace(cfg.WANUpstreams[1])
 	}
 	lan1, lan2 := "", ""
 	if len(cfg.LANUpstreams) > 0 {
-		lan1 = cfg.LANUpstreams[0]
+		lan1 = strings.TrimSpace(cfg.LANUpstreams[0])
 	}
 	if len(cfg.LANUpstreams) > 1 {
-		lan2 = cfg.LANUpstreams[1]
-	}
-	for _, kv := range [][2]string{
-		{"dhcp_dns1_x", lan1},
-		{"dhcp_dns2_x", lan2},
-		{"lan_dns1_x", lan1},
-		{"lan_dns2_x", lan2},
-	} {
-		if err := b.nvramSet(ctx, kv[0], kv[1]); err != nil {
-			return err
-		}
+		lan2 = strings.TrimSpace(cfg.LANUpstreams[1])
 	}
 	dot := "0"
 	if cfg.DoTEnabled {
 		dot = "1"
 	}
-	if err := b.nvramSet(ctx, "dnspriv_enable", dot); err != nil {
+	for _, kv := range [][2]string{
+		{"wan0_dnsenable_x", auto}, {"wan_dnsenable_x", auto},
+		{"wan0_dns1_x", dns1}, {"wan_dns1_x", dns1},
+		{"wan0_dns2_x", dns2}, {"wan_dns2_x", dns2},
+		{"dhcp_dns1_x", lan1}, {"dhcp_dns2_x", lan2},
+		{"lan_dns1_x", lan1}, {"lan_dns2_x", lan2},
+		{"dnspriv_enable", dot},
+		{"dnspriv_profile", cfg.DoTProfile},
+		{"dnspriv_rulelist", cfg.DoTRules},
+	} {
+		if err := b.nvramSet(ctx, kv[0], kv[1]); err != nil {
+			return err
+		}
+	}
+	if err := b.nvramCommit(ctx); err != nil {
 		return err
 	}
-	if err := b.nvramSet(ctx, "dnspriv_profile", cfg.DoTProfile); err != nil {
-		return err
+
+	wanChanged := cur.WANDNSAuto != (auto == "1") ||
+		strings.Join(cur.WANUpstreams, " ") != strings.Join(cfg.WANUpstreams, " ") && auto == "0" ||
+		cur.DoTEnabled != cfg.DoTEnabled || cur.DoTProfile != cfg.DoTProfile || cur.DoTRules != cfg.DoTRules
+	lanChanged := strings.Join(cur.LANUpstreams, " ") != strings.Join(cfg.LANUpstreams, " ")
+	if wanChanged {
+		if _, err := b.run(ctx, 90*time.Second, "service", "restart_wan_if", "0"); err != nil {
+			return fmt.Errorf("asuswrt: restart_wan_if 0: %w", err)
+		}
+	} else if lanChanged {
+		if err := b.restartDnsmasq(ctx); err != nil {
+			return err
+		}
 	}
-	if err := b.nvramSet(ctx, "dnspriv_rulelist", cfg.DoTRules); err != nil {
-		return err
+	return nil
+}
+
+func (b *Backend) restartDnsmasq(ctx context.Context) error {
+	if _, err := b.run(ctx, 30*time.Second, "service", "restart_dnsmasq"); err != nil {
+		return fmt.Errorf("asuswrt: restart_dnsmasq: %w", err)
 	}
-	return b.nvramCommit(ctx)
+	return nil
 }
 
 func dnsInfoFromNVRAM(get func(string) string) backend.DNSInfo {
-	wan := get("wan0_dns")
-	if wan == "" {
-		wan = get("wan_dns")
+	first := func(keys ...string) string {
+		for _, k := range keys {
+			if v := strings.TrimSpace(get(k)); v != "" {
+				return v
+			}
+		}
+		return ""
 	}
 	info := backend.DNSInfo{
-		WANUpstreams: splitDNSList(wan),
-		DoTEnabled:   get("dnspriv_enable") == "1",
-		DoTProfile:   get("dnspriv_profile"),
-		DoTRules:     get("dnspriv_rulelist"),
+		WANDNSAuto: first("wan0_dnsenable_x", "wan_dnsenable_x") != "0",
+		DoTEnabled: get("dnspriv_enable") == "1",
+		DoTProfile: get("dnspriv_profile"),
+		DoTRules:   get("dnspriv_rulelist"),
+	}
+	if info.WANDNSAuto {
+		// Automatic: show what the ISP handed out (runtime state).
+		info.WANUpstreams = splitDNSList(first("wan0_dns", "wan_dns"))
+	} else {
+		for _, v := range []string{first("wan0_dns1_x", "wan_dns1_x"), first("wan0_dns2_x", "wan_dns2_x")} {
+			if v != "" {
+				info.WANUpstreams = append(info.WANUpstreams, v)
+			}
+		}
 	}
 	for _, k := range []string{"dhcp_dns1_x", "lan_dns1_x", "dhcp_dns2_x", "lan_dns2_x"} {
 		if v := strings.TrimSpace(get(k)); v != "" {
@@ -291,10 +343,7 @@ func (b *Backend) SetDHCPReservation(ctx context.Context, r backend.DHCPReservat
 	if !found {
 		list = append(list, r)
 	}
-	if err := b.nvramSet(ctx, "dhcp_staticlist", formatDHCPStaticList(list)); err != nil {
-		return err
-	}
-	return b.nvramCommit(ctx)
+	return b.writeDHCPStaticList(ctx, list)
 }
 
 func (b *Backend) DeleteDHCPReservation(ctx context.Context, mac string) error {
@@ -312,10 +361,22 @@ func (b *Backend) DeleteDHCPReservation(ctx context.Context, mac string) error {
 			out = append(out, r)
 		}
 	}
-	if err := b.nvramSet(ctx, "dhcp_staticlist", formatDHCPStaticList(out)); err != nil {
+	return b.writeDHCPStaticList(ctx, out)
+}
+
+// writeDHCPStaticList saves the reservation list and applies it the way
+// Advanced_DHCP_Content.asp does for a static-list-only change.
+func (b *Backend) writeDHCPStaticList(ctx context.Context, list []backend.DHCPReservation) error {
+	if err := b.nvramSet(ctx, "dhcp_static_x", "1"); err != nil {
 		return err
 	}
-	return b.nvramCommit(ctx)
+	if err := b.nvramSet(ctx, "dhcp_staticlist", formatDHCPStaticList(list)); err != nil {
+		return err
+	}
+	if err := b.nvramCommit(ctx); err != nil {
+		return err
+	}
+	return b.restartDnsmasq(ctx)
 }
 
 // parseDHCPStaticList parses Merlin dhcp_staticlist:
@@ -390,7 +451,16 @@ func (b *Backend) SetQoSEnable(ctx context.Context, enabled bool) error {
 	if err := b.nvramSet(ctx, "qos_enable", v); err != nil {
 		return err
 	}
-	return b.nvramCommit(ctx)
+	if err := b.nvramCommit(ctx); err != nil {
+		return err
+	}
+	// Same apply sequence as QoS_EZQoS.asp.
+	for _, svc := range []string{"restart_qos", "restart_firewall"} {
+		if _, err := b.run(ctx, 60*time.Second, "service", svc); err != nil {
+			return fmt.Errorf("asuswrt: %s: %w", svc, err)
+		}
+	}
+	return nil
 }
 
 func qosInfoFromNVRAM(get func(string) string) backend.QoSInfo {

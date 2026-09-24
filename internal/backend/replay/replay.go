@@ -244,6 +244,7 @@ func (b *Backend) DNSConfig(_ context.Context) (backend.DNSInfo, error) {
 		wan = nv["wan_dns"]
 	}
 	info := backend.DNSInfo{
+		WANDNSAuto:   nv["wan0_dnsenable_x"] != "0",
 		WANUpstreams: fieldsOrNil(wan),
 		DoTEnabled:   nv["dnspriv_enable"] == "1",
 		DoTProfile:   nv["dnspriv_profile"],

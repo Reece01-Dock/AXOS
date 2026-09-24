@@ -182,6 +182,10 @@ type PerfResult struct {
 
 // DNSInfo is the router's DNS configuration (upstreams + optional DoT).
 type DNSInfo struct {
+	// WANDNSAuto reports "Connect to DNS Server automatically" (the ISP's
+	// servers). It is read-only: a write with WANUpstreams empty selects
+	// automatic, a write with 1-2 servers selects manual.
+	WANDNSAuto   bool     `json:"wan_dns_auto"`
 	WANUpstreams []string `json:"wan_upstreams,omitempty"`
 	LANUpstreams []string `json:"lan_upstreams,omitempty"`
 	DoTEnabled   bool     `json:"dot_enabled"`
