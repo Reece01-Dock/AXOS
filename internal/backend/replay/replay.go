@@ -224,6 +224,10 @@ func (b *Backend) SetPolicyRoute(_ context.Context, _ backend.PolicyRoute) error
 	return fmt.Errorf("replay: set policy route is not supported against a replayed fixture (immutable snapshot)")
 }
 
+func (b *Backend) ReplacePolicyRoutes(_ context.Context, _ []backend.PolicyRoute) error {
+	return fmt.Errorf("replay: replace policy routes is not supported against a replayed fixture (immutable snapshot)")
+}
+
 func (b *Backend) DeletePolicyRoute(_ context.Context, _ string) error {
 	return fmt.Errorf("replay: delete policy route is not supported against a replayed fixture (immutable snapshot)")
 }
@@ -399,6 +403,7 @@ func parseVPNDirectorRuleList(raw string) []backend.PolicyRoute {
 			Enabled:     fields[0] == "1",
 			Description: fields[1],
 			Source:      fields[2],
+			Remote:      fields[3],
 			Interface:   fields[4],
 		})
 	}

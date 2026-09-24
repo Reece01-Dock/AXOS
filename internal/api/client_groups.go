@@ -3,9 +3,12 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/reece01-dock/axos/internal/backend"
@@ -15,7 +18,7 @@ import (
 type ClientGroup struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
-	Members     []string `json:"members"` // MACs
+	Members     []string `json:"members"`             // MACs, AA:BB:CC:DD:EE:FF
 	Interface   string   `json:"interface,omitempty"` // default tunnel e.g. WGC5
 	Description string   `json:"description,omitempty"`
 }
@@ -24,7 +27,16 @@ type clientGroupsFile struct {
 	Groups []ClientGroup `json:"groups"`
 }
 
-var clientGroupsMu sync.Mutex
+const (
+	maxClientGroups       = 64
+	maxClientGroupMembers = 256
+	maxClientGroupName    = 32
+)
+
+var (
+	clientGroupsMu sync.Mutex
+	clientGroupID  = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,31}$`)
+)
 
 func (s *Server) clientGroupsPath() string {
 	if s.DataDir == "" {
@@ -50,29 +62,75 @@ func (s *Server) handlePutClientGroups(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if body.Groups == nil {
-		body.Groups = []ClientGroup{}
+	groups, err := normalizeClientGroups(body.Groups)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
 	}
-	for i := range body.Groups {
-		if body.Groups[i].ID == "" {
-			writeError(w, http.StatusBadRequest, fmt.Errorf("group id is required"))
-			return
-		}
-		if body.Groups[i].Name == "" {
-			body.Groups[i].Name = body.Groups[i].ID
-		}
-		if body.Groups[i].Members == nil {
-			body.Groups[i].Members = []string{}
-		}
-	}
-	if err := s.saveClientGroups(body.Groups); err != nil {
+	if err := s.saveClientGroups(groups); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.audit(s.actor(r), "vpn.client_groups.set", map[string]interface{}{
-		"count": len(body.Groups),
+		"count": len(groups),
 	}, "", nil)
-	writeJSON(w, http.StatusOK, map[string]interface{}{"groups": body.Groups})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"groups": groups})
+}
+
+// normalizeClientGroups validates a full group list: ids are unique slugs,
+// names are short, members are well-formed MACs (canonicalised to
+// upper-case colon form and de-duplicated), interfaces use Director tokens.
+func normalizeClientGroups(in []ClientGroup) ([]ClientGroup, error) {
+	if len(in) > maxClientGroups {
+		return nil, fmt.Errorf("at most %d groups are allowed", maxClientGroups)
+	}
+	out := make([]ClientGroup, 0, len(in))
+	ids := make(map[string]bool, len(in))
+	for i, g := range in {
+		g.ID = strings.TrimSpace(g.ID)
+		if !clientGroupID.MatchString(g.ID) {
+			return nil, fmt.Errorf("group %d: id %q must be 1-32 chars of a-z, 0-9, '-' or '_'", i+1, g.ID)
+		}
+		if ids[g.ID] {
+			return nil, fmt.Errorf("group %d: duplicate id %q", i+1, g.ID)
+		}
+		ids[g.ID] = true
+		g.Name = strings.TrimSpace(g.Name)
+		if g.Name == "" {
+			g.Name = g.ID
+		}
+		if len(g.Name) > maxClientGroupName {
+			return nil, fmt.Errorf("group %q: name is longer than %d characters", g.ID, maxClientGroupName)
+		}
+		if len(g.Members) > maxClientGroupMembers {
+			return nil, fmt.Errorf("group %q: at most %d members are allowed", g.ID, maxClientGroupMembers)
+		}
+		members := make([]string, 0, len(g.Members))
+		seen := make(map[string]bool, len(g.Members))
+		for _, m := range g.Members {
+			mac, err := canonicalMAC(m)
+			if err != nil {
+				return nil, fmt.Errorf("group %q: %w", g.ID, err)
+			}
+			if !seen[mac] {
+				seen[mac] = true
+				members = append(members, mac)
+			}
+		}
+		g.Members = members
+		g.Interface = backend.NormalizeDirectorIface(g.Interface)
+		g.Description = strings.TrimSpace(g.Description)
+		out = append(out, g)
+	}
+	return out, nil
+}
+
+func canonicalMAC(s string) (string, error) {
+	hw, err := net.ParseMAC(strings.TrimSpace(s))
+	if err != nil || len(hw) != 6 {
+		return "", fmt.Errorf("invalid MAC address %q", s)
+	}
+	return strings.ToUpper(hw.String()), nil
 }
 
 func (s *Server) loadClientGroups() ([]ClientGroup, error) {
@@ -120,87 +178,49 @@ func (s *Server) saveClientGroups(groups []ClientGroup) error {
 	return os.Rename(tmp, path)
 }
 
-type policyBulkRequest struct {
-	Interface   string   `json:"interface"` // WAN, WGC5, ...
-	Description string   `json:"description"`
-	Sources     []string `json:"sources"` // MAC or IP per client
-	Enabled     *bool    `json:"enabled,omitempty"`
+type clientGroupApplyRequest struct {
+	Interface   string `json:"interface,omitempty"` // defaults to the group's own
+	Description string `json:"description,omitempty"`
+	Replace     bool   `json:"replace"`
 }
 
-func (s *Server) handlePolicyBulk(w http.ResponseWriter, r *http.Request) {
-	var req policyBulkRequest
+// handleApplyClientGroup steers every member of a group to an interface in
+// one VPN Director write — the server-side twin of the UI's group preset.
+func (s *Server) handleApplyClientGroup(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req clientGroupApplyRequest
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if req.Interface == "" {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("interface is required"))
+	groups, err := s.loadClientGroups()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	sources := make([]string, 0, len(req.Sources))
-	seen := map[string]bool{}
-	for _, src := range req.Sources {
-		src = stringsTrim(src)
-		if src == "" || seen[stringsToLower(src)] {
-			continue
+	var group *ClientGroup
+	for i := range groups {
+		if groups[i].ID == id {
+			group = &groups[i]
+			break
 		}
-		seen[stringsToLower(src)] = true
-		sources = append(sources, src)
 	}
-	if len(sources) == 0 {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("sources is required"))
+	if group == nil {
+		writeError(w, http.StatusNotFound, fmt.Errorf("no client group %q", id))
 		return
 	}
-	enabled := true
-	if req.Enabled != nil {
-		enabled = *req.Enabled
+	iface := req.Interface
+	if iface == "" {
+		iface = group.Interface
 	}
 	desc := req.Description
 	if desc == "" {
-		desc = "axos"
+		desc = group.Name
 	}
-	applied := 0
-	for _, src := range sources {
-		route := backend.PolicyRoute{
-			Source:      src,
-			Interface:   req.Interface,
-			Description: desc,
-			Enabled:     enabled,
-		}
-		err := s.Backend.SetPolicyRoute(r.Context(), route)
-		s.audit(s.actor(r), "route.policy.set", map[string]interface{}{
-			"source": src, "interface": req.Interface, "bulk": true,
-		}, "", err)
-		if err != nil {
-			writeError(w, http.StatusBadGateway, err)
-			return
-		}
-		applied++
-	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":  "ok",
-		"applied": applied,
-	})
-}
-
-func stringsTrim(s string) string {
-	for len(s) > 0 && (s[0] == ' ' || s[0] == '\t') {
-		s = s[1:]
-	}
-	for len(s) > 0 && (s[len(s)-1] == ' ' || s[len(s)-1] == '\t') {
-		s = s[:len(s)-1]
-	}
-	return s
-}
-
-func stringsToLower(s string) string {
-	b := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {
-			c += 'a' - 'A'
-		}
-		b[i] = c
-	}
-	return string(b)
+	s.applyPolicyBulk(w, r, policyBulkRequest{
+		Interface:   iface,
+		Description: desc,
+		Sources:     group.Members,
+		Replace:     req.Replace,
+	}, "vpn.client_groups.apply", map[string]interface{}{"group": id})
 }

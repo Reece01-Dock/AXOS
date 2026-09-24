@@ -163,12 +163,12 @@ type DiagResult struct {
 
 // IperfOpts configures a from-router iperf3 run.
 type IperfOpts struct {
-	Mode     string `json:"mode"` // "client" or "server"
-	Target   string `json:"target,omitempty"`
-	Port     int    `json:"port,omitempty"`
-	Seconds  int    `json:"seconds,omitempty"`
-	Reverse  bool   `json:"reverse,omitempty"`
-	UDP      bool   `json:"udp,omitempty"`
+	Mode    string `json:"mode"` // "client" or "server"
+	Target  string `json:"target,omitempty"`
+	Port    int    `json:"port,omitempty"`
+	Seconds int    `json:"seconds,omitempty"`
+	Reverse bool   `json:"reverse,omitempty"`
+	UDP     bool   `json:"udp,omitempty"`
 }
 
 // PerfResult summarises a bandwidth / latency measurement.
@@ -219,28 +219,29 @@ type VPNProfile struct {
 // PrivateKey is accepted for import then stored only in the dedicated
 // secrets path / nvram — never returned by VPNProfiles / VPNStatus.
 type WireGuardImport struct {
-	Unit         int      `json:"unit"` // 1..5
-	Description  string   `json:"description,omitempty"`
-	PrivateKey   string   `json:"private_key"`
-	PeerPublicKey string  `json:"peer_public_key"`
-	PresharedKey string   `json:"preshared_key,omitempty"`
-	Endpoint     string   `json:"endpoint"`
-	EndpointPort int      `json:"endpoint_port"`
-	Address      string   `json:"address"` // tunnel local CIDR
-	AllowedIPs   []string `json:"allowed_ips"`
-	DNS          string   `json:"dns,omitempty"`
-	MTU          int      `json:"mtu,omitempty"`
-	Keepalive    int      `json:"keepalive,omitempty"`
-	Nat          bool     `json:"nat"`
-	KillSwitch   bool     `json:"kill_switch"`
+	Unit          int      `json:"unit"` // 1..5
+	Description   string   `json:"description,omitempty"`
+	PrivateKey    string   `json:"private_key"`
+	PeerPublicKey string   `json:"peer_public_key"`
+	PresharedKey  string   `json:"preshared_key,omitempty"`
+	Endpoint      string   `json:"endpoint"`
+	EndpointPort  int      `json:"endpoint_port"`
+	Address       string   `json:"address"` // tunnel local CIDR
+	AllowedIPs    []string `json:"allowed_ips"`
+	DNS           string   `json:"dns,omitempty"`
+	MTU           int      `json:"mtu,omitempty"`
+	Keepalive     int      `json:"keepalive,omitempty"`
+	Nat           bool     `json:"nat"`
+	KillSwitch    bool     `json:"kill_switch"`
 }
 
 // PolicyRoute steers a device (or subnet) to WAN or a VPN client.
 type PolicyRoute struct {
 	ID          string `json:"id"`
 	Description string `json:"description,omitempty"`
-	Source      string `json:"source"` // MAC, IP, or CIDR
-	Interface   string `json:"interface"` // "wan", "wgc1", "ovpnc1", ...
+	Source      string `json:"source"`           // IP or CIDR (VPN Director "Local IP")
+	Remote      string `json:"remote,omitempty"` // destination IP/CIDR; empty = any
+	Interface   string `json:"interface"`        // "wan", "wgc1", "ovpnc1", ...
 	KillSwitch  bool   `json:"kill_switch,omitempty"`
 	Enabled     bool   `json:"enabled"`
 }

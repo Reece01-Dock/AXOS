@@ -102,8 +102,12 @@ type RouterBackend interface {
 	FirewallDelete(ctx context.Context, rule FirewallRule) error
 
 	// PolicyRoutes / SetPolicyRoute / DeletePolicyRoute manage per-device
-	// WAN/VPN steering (VPN Director / Fusion style).
+	// WAN/VPN steering (VPN Director / Fusion style). SetPolicyRoute
+	// updates the rule with r.ID, or appends when r.ID is empty.
+	// ReplacePolicyRoutes writes a whole rule list in one step (one apply /
+	// routing restart) — callers merge with MergePolicyRoutes first.
 	PolicyRoutes(ctx context.Context) ([]PolicyRoute, error)
 	SetPolicyRoute(ctx context.Context, r PolicyRoute) error
+	ReplacePolicyRoutes(ctx context.Context, routes []PolicyRoute) error
 	DeletePolicyRoute(ctx context.Context, id string) error
 }

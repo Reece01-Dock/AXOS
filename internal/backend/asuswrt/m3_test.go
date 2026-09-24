@@ -1,6 +1,7 @@
 package asuswrt
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -74,16 +75,14 @@ func TestFormatVPNDirectorRuleList_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestNormalizeDirectorIface(t *testing.T) {
-	cases := map[string]string{
-		"wan": "WAN", "WAN": "WAN",
-		"wgc5": "WGC5", "WGC5": "WGC5",
-		"ovpnc1": "OVPN1", "OVPN1": "OVPN1", "ovpn2": "OVPN2",
+func TestVPNDirectorRuleList_PreservesRemote(t *testing.T) {
+	raw := "<1>Work>192.168.1.9>10.0.0.0/8>OVPN1<1>TV>192.168.1.10>>WGC5"
+	got := parseVPNDirectorRuleList(raw)
+	if len(got) != 2 || got[0].Remote != "10.0.0.0/8" || got[1].Remote != "" {
+		t.Fatalf("got %+v", got)
 	}
-	for in, want := range cases {
-		if got := normalizeDirectorIface(in); got != want {
-			t.Errorf("normalizeDirectorIface(%q)=%q want %q", in, got, want)
-		}
+	if back := formatVPNDirectorRuleList(got); back != raw {
+		t.Errorf("round trip = %q, want %q", back, raw)
 	}
 }
 
@@ -148,5 +147,60 @@ func TestParseVPNName(t *testing.T) {
 	}
 	if _, _, err := parseVPNName("wg0"); err == nil {
 		t.Fatal("wg0 should be rejected")
+	}
+}
+
+func TestReplacePolicyRoutes_SingleCommitAndRestart(t *testing.T) {
+	r := &fakeRunner{}
+	b := newTestBackend(t, r)
+	routes := []backend.PolicyRoute{
+		{Enabled: true, Description: "a", Source: "192.168.50.11", Interface: "wgc5"},
+		{Enabled: true, Description: "b", Source: "192.168.50.12", Interface: "ovpnc1"},
+		{Enabled: true, Description: "c", Source: "192.168.50.0/28", Interface: "WAN"},
+	}
+	if err := b.ReplacePolicyRoutes(context.Background(), routes); err != nil {
+		t.Fatalf("ReplacePolicyRoutes: %v", err)
+	}
+	var sets, commits, restarts int
+	for _, c := range r.calls {
+		switch {
+		case strings.HasPrefix(c, "nvram set vpndirector_rulelist="):
+			sets++
+			if !strings.Contains(c, ">WGC5<") || !strings.Contains(c, ">OVPN1<") {
+				t.Errorf("interfaces not normalised: %s", c)
+			}
+		case c == "nvram commit":
+			commits++
+		case c == "service restart_vpnrouting0":
+			restarts++
+		}
+	}
+	if sets != 1 || commits != 1 || restarts != 1 {
+		t.Fatalf("sets=%d commits=%d restarts=%d, want 1/1/1; calls=%v", sets, commits, restarts, r.calls)
+	}
+}
+
+func TestReplacePolicyRoutes_RejectsDuplicateSource(t *testing.T) {
+	r := &fakeRunner{}
+	b := newTestBackend(t, r)
+	err := b.ReplacePolicyRoutes(context.Background(), []backend.PolicyRoute{
+		{Source: "192.168.50.9", Interface: "WGC1"},
+		{Source: "192.168.50.9", Interface: "WAN"},
+	})
+	if err == nil {
+		t.Fatal("want duplicate-source error")
+	}
+	if len(r.calls) != 0 {
+		t.Fatalf("nothing should be written on validation failure, got %v", r.calls)
+	}
+}
+
+func TestSetPolicyRoute_UnknownIDIsError(t *testing.T) {
+	r := &fakeRunner{respond: func(name string, args []string) (string, string, int) {
+		return "<1>TV>192.168.50.9>>WGC1", "", 0
+	}}
+	b := newTestBackend(t, r)
+	if err := b.SetPolicyRoute(context.Background(), backend.PolicyRoute{ID: "7", Source: "x", Interface: "WAN"}); err == nil {
+		t.Fatal("want error for unknown id")
 	}
 }

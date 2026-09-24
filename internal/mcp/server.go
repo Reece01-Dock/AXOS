@@ -156,9 +156,15 @@ func (s *Server) registerTools() {
 		true, handleFirewallRulesDelete)
 
 	s.register("route.policy.list", "List policy routes (device → WAN/VPN steering).", schema(""), false, handlePolicyList)
-	s.register("route.policy.set", "Create or update a policy route.",
-		schema(`"id":{"type":"string"},"description":{"type":"string"},"source":{"type":"string"},"interface":{"type":"string"},"kill_switch":{"type":"boolean"},"enabled":{"type":"boolean"}`),
+	s.register("route.policy.set", "Create or update a policy route. Without id, a device that already has a rule is refused unless replace=true.",
+		schema(`"id":{"type":"string"},"description":{"type":"string"},"source":{"type":"string"},"remote":{"type":"string"},"interface":{"type":"string"},"kill_switch":{"type":"boolean"},"enabled":{"type":"boolean"},"replace":{"type":"boolean","default":false}`),
 		true, handlePolicySet)
+	s.register("route.policy.bulk", "Steer many devices (IP, CIDR, or MAC resolved to its current IP) to one interface (WAN, WGCn, OVPNn) in a single VPN Director apply. Existing rules for those devices are refused unless replace=true.",
+		schema(`"interface":{"type":"string"},"description":{"type":"string"},"sources":{"type":"array","items":{"type":"string"}},"replace":{"type":"boolean","default":false}`),
+		true, handlePolicyBulk)
+	s.register("route.policy.remove", "Remove every policy rule for the given devices (IP, CIDR or MAC) in a single VPN Director apply.",
+		schema(`"sources":{"type":"array","items":{"type":"string"}}`),
+		true, handlePolicyRemove)
 	s.register("route.policy.delete", "Delete a policy route by id.",
 		schema(`"id":{"type":"string"}`), true, handlePolicyDelete)
 }

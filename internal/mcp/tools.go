@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/reece01-dock/axos/internal/backend"
 	"github.com/reece01-dock/axos/internal/rollback"
@@ -419,18 +420,128 @@ func handlePolicyList(ctx context.Context, s *Server, _ json.RawMessage) (interf
 	return s.Backend.PolicyRoutes(ctx)
 }
 
+type policySetArgs struct {
+	backend.PolicyRoute
+	Replace bool `json:"replace"`
+}
+
+// handlePolicySet updates a rule by id, or adds one. Adding a rule for a
+// device that already has one is refused unless replace=true, so an agent
+// never silently overwrites a rule a person made in VPN Director.
 func handlePolicySet(ctx context.Context, s *Server, raw json.RawMessage) (interface{}, error) {
-	var route backend.PolicyRoute
-	if err := decodeArgs(raw, &route); err != nil {
+	var a policySetArgs
+	if err := decodeArgs(raw, &a); err != nil {
 		return nil, err
 	}
+	route := a.PolicyRoute
 	if route.Source == "" || route.Interface == "" {
 		return nil, fmt.Errorf("source and interface are required")
 	}
-	if err := s.Backend.SetPolicyRoute(ctx, route); err != nil {
+	resolved, err := resolvePolicySources(ctx, s, []string{route.Source})
+	if err != nil {
 		return nil, err
 	}
-	return map[string]string{"status": "ok"}, nil
+	route.Source = resolved[0]
+	if route.ID != "" {
+		if err := s.Backend.SetPolicyRoute(ctx, route); err != nil {
+			return nil, err
+		}
+		return map[string]string{"status": "ok"}, nil
+	}
+	return mergePolicy(ctx, s, []backend.PolicyRoute{route}, a.Replace)
+}
+
+type policyBulkArgs struct {
+	Interface   string   `json:"interface"`
+	Description string   `json:"description"`
+	Sources     []string `json:"sources"`
+	Replace     bool     `json:"replace"`
+}
+
+// handlePolicyBulk steers many devices to one interface in a single
+// Director write (one routing restart).
+func handlePolicyBulk(ctx context.Context, s *Server, raw json.RawMessage) (interface{}, error) {
+	var a policyBulkArgs
+	if err := decodeArgs(raw, &a); err != nil {
+		return nil, err
+	}
+	if backend.NormalizeDirectorIface(a.Interface) == "" || len(a.Sources) == 0 {
+		return nil, fmt.Errorf("interface and sources are required")
+	}
+	desc := a.Description
+	if desc == "" {
+		desc = "axos"
+	}
+	sources, err := resolvePolicySources(ctx, s, a.Sources)
+	if err != nil {
+		return nil, err
+	}
+	updates := make([]backend.PolicyRoute, 0, len(sources))
+	for _, src := range sources {
+		updates = append(updates, backend.PolicyRoute{Source: src, Interface: a.Interface, Description: desc, Enabled: true})
+	}
+	return mergePolicy(ctx, s, updates, a.Replace)
+}
+
+type policyRemoveArgs struct {
+	Sources []string `json:"sources"`
+}
+
+// handlePolicyRemove drops every rule for the given devices in one write.
+func handlePolicyRemove(ctx context.Context, s *Server, raw json.RawMessage) (interface{}, error) {
+	var a policyRemoveArgs
+	if err := decodeArgs(raw, &a); err != nil {
+		return nil, err
+	}
+	if len(a.Sources) == 0 {
+		return nil, fmt.Errorf("sources is required")
+	}
+	sources, err := resolvePolicySources(ctx, s, a.Sources)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := s.Backend.PolicyRoutes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out, removed := backend.RemovePolicySources(existing, sources)
+	if removed > 0 {
+		if err := s.Backend.ReplacePolicyRoutes(ctx, out); err != nil {
+			return nil, err
+		}
+	}
+	return map[string]interface{}{"status": "ok", "removed": removed}, nil
+}
+
+// resolvePolicySources maps MACs to current client IPs (VPN Director
+// matches on IP).
+func resolvePolicySources(ctx context.Context, s *Server, sources []string) ([]string, error) {
+	clients, err := s.Backend.Clients(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return backend.ResolvePolicySources(sources, clients)
+}
+
+func mergePolicy(ctx context.Context, s *Server, updates []backend.PolicyRoute, replace bool) (interface{}, error) {
+	existing, err := s.Backend.PolicyRoutes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res := backend.MergePolicyRoutes(existing, updates, replace)
+	if len(res.Conflicts) > 0 && !replace {
+		srcs := make([]string, 0, len(res.Conflicts))
+		for _, c := range res.Conflicts {
+			srcs = append(srcs, c.Existing.Source+" -> "+c.Existing.Interface)
+		}
+		return nil, fmt.Errorf("existing VPN Director rules would be replaced (%s); call again with replace=true to overwrite them", strings.Join(srcs, ", "))
+	}
+	if res.Added+res.Replaced > 0 {
+		if err := s.Backend.ReplacePolicyRoutes(ctx, res.Routes); err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 type policyDeleteArgs struct {

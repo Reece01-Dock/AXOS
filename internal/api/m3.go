@@ -43,9 +43,7 @@ func (s *Server) registerM3Routes() {
 	s.mux.HandleFunc("GET /v1/policy", s.readHandler(func(ctx context.Context) (interface{}, error) {
 		return s.Backend.PolicyRoutes(ctx)
 	}))
-	s.mux.HandleFunc("POST /v1/policy", s.handleSetPolicyRoute)
-	s.mux.HandleFunc("POST /v1/policy/bulk", s.handlePolicyBulk)
-	s.mux.HandleFunc("DELETE /v1/policy/{id}", s.handleDeletePolicyRoute)
+	s.registerPolicyRoutes()
 
 	s.mux.HandleFunc("GET /v1/vpn/client-groups", s.handleGetClientGroups)
 	s.mux.HandleFunc("PUT /v1/vpn/client-groups", s.handlePutClientGroups)
@@ -228,43 +226,6 @@ func (s *Server) handleFirewallDelete(w http.ResponseWriter, r *http.Request) {
 	s.audit(s.actor(r), "firewall.rules.delete", map[string]interface{}{
 		"table": rule.Table, "chain": rule.Chain, "rule": rule.Rule,
 	}, "", err)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-func (s *Server) handleSetPolicyRoute(w http.ResponseWriter, r *http.Request) {
-	var route backend.PolicyRoute
-	if err := readJSON(r, &route); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	if route.Source == "" || route.Interface == "" {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("source and interface are required"))
-		return
-	}
-	err := s.Backend.SetPolicyRoute(r.Context(), route)
-	s.audit(s.actor(r), "route.policy.set", map[string]interface{}{
-		"id": route.ID, "source": route.Source, "interface": route.Interface,
-		"kill_switch": route.KillSwitch, "enabled": route.Enabled,
-	}, "", err)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-func (s *Server) handleDeletePolicyRoute(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("id is required"))
-		return
-	}
-	err := s.Backend.DeletePolicyRoute(r.Context(), id)
-	s.audit(s.actor(r), "route.policy.delete", map[string]interface{}{"id": id}, "", err)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)
 		return

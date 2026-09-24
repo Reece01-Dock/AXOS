@@ -329,6 +329,10 @@ func (c *Client) SetPolicyRoute(ctx context.Context, r backend.PolicyRoute) erro
 	return c.do(ctx, http.MethodPost, "/v1/policy", r, nil)
 }
 
+func (c *Client) ReplacePolicyRoutes(ctx context.Context, routes []backend.PolicyRoute) error {
+	return c.do(ctx, http.MethodPut, "/v1/policy", routes, nil)
+}
+
 func (c *Client) DeletePolicyRoute(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodDelete, "/v1/policy/"+url.PathEscape(id), nil, nil)
 }

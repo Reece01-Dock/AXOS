@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -53,6 +54,10 @@ func TestLANAuth_LANRequiresToken(t *testing.T) {
 		}
 		if rr2.Header().Get("Access-Control-Allow-Origin") != origin {
 			t.Fatalf("OPTIONS %s missing CORS, got %q", origin, rr2.Header().Get("Access-Control-Allow-Origin"))
+		}
+		// The Merlin UI saves client groups with PUT.
+		if m := rr2.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(m, "PUT") {
+			t.Fatalf("OPTIONS %s Allow-Methods = %q, want PUT", origin, m)
 		}
 
 		req3 := httptest.NewRequest(http.MethodGet, "/v1/info", nil)

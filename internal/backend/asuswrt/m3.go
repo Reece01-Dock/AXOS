@@ -675,25 +675,13 @@ func (b *Backend) PolicyRoutes(ctx context.Context) ([]backend.PolicyRoute, erro
 }
 
 func (b *Backend) SetPolicyRoute(ctx context.Context, r backend.PolicyRoute) error {
-	r.Interface = normalizeDirectorIface(r.Interface)
-	if r.Interface == "" {
-		return fmt.Errorf("asuswrt: set policy route: interface is required (WAN, WGCn, OVPNn)")
-	}
 	list, err := b.PolicyRoutes(ctx)
 	if err != nil {
 		return err
 	}
-	// Upsert by source when ID empty: one rule per device.
-	if r.ID == "" && r.Source != "" {
-		src := strings.ToLower(strings.TrimSpace(r.Source))
-		for i := range list {
-			if strings.ToLower(strings.TrimSpace(list[i].Source)) == src {
-				r.ID = list[i].ID
-				break
-			}
-		}
-	}
-	if r.ID != "" {
+	if r.ID == "" {
+		list = append(list, r)
+	} else {
 		found := false
 		for i := range list {
 			if list[i].ID == r.ID {
@@ -703,17 +691,33 @@ func (b *Backend) SetPolicyRoute(ctx context.Context, r backend.PolicyRoute) err
 			}
 		}
 		if !found {
-			list = append(list, r)
+			return fmt.Errorf("asuswrt: set policy route: no rule with id %q", r.ID)
 		}
-	} else {
-		r.ID = strconv.Itoa(len(list) + 1)
-		list = append(list, r)
 	}
-	// Re-number IDs to stable 1-based indices for Merlin rulelist round-trip.
+	return b.ReplacePolicyRoutes(ctx, list)
+}
+
+// maxVPNDirectorRuleListLen mirrors Advanced_VPNDirector.asp's own check.
+const maxVPNDirectorRuleListLen = 7999
+
+// ReplacePolicyRoutes writes the whole VPN Director rule list with a single
+// nvram commit and a single restart_vpnrouting0, so a bulk change costs one
+// routing reload instead of one per device.
+func (b *Backend) ReplacePolicyRoutes(ctx context.Context, routes []backend.PolicyRoute) error {
+	list := make([]backend.PolicyRoute, len(routes))
+	copy(list, routes)
 	for i := range list {
+		list[i].Interface = backend.NormalizeDirectorIface(list[i].Interface)
 		list[i].ID = strconv.Itoa(i + 1)
 	}
-	if err := b.nvramSet(ctx, "vpndirector_rulelist", formatVPNDirectorRuleList(list)); err != nil {
+	if err := backend.ValidatePolicyRoutes(list); err != nil {
+		return fmt.Errorf("asuswrt: %w", err)
+	}
+	value := formatVPNDirectorRuleList(list)
+	if len(value) > maxVPNDirectorRuleListLen {
+		return fmt.Errorf("asuswrt: VPN Director rule list is %d characters, over Merlin's %d limit — remove rules or shorten descriptions", len(value), maxVPNDirectorRuleListLen)
+	}
+	if err := b.nvramSet(ctx, "vpndirector_rulelist", value); err != nil {
 		return err
 	}
 	if err := b.nvramCommit(ctx); err != nil {
@@ -731,22 +735,16 @@ func (b *Backend) DeletePolicyRoute(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	out := list[:0]
+	out := make([]backend.PolicyRoute, 0, len(list))
 	for _, r := range list {
 		if r.ID != id {
 			out = append(out, r)
 		}
 	}
-	for i := range out {
-		out[i].ID = strconv.Itoa(i + 1)
+	if len(out) == len(list) {
+		return fmt.Errorf("asuswrt: delete policy route: no rule with id %q", id)
 	}
-	if err := b.nvramSet(ctx, "vpndirector_rulelist", formatVPNDirectorRuleList(out)); err != nil {
-		return err
-	}
-	if err := b.nvramCommit(ctx); err != nil {
-		return err
-	}
-	return b.restartVPNRouting(ctx)
+	return b.ReplacePolicyRoutes(ctx, out)
 }
 
 func (b *Backend) restartVPNRouting(ctx context.Context) error {
@@ -755,41 +753,6 @@ func (b *Backend) restartVPNRouting(ctx context.Context) error {
 		return fmt.Errorf("asuswrt: restart_vpnrouting0: %w", err)
 	}
 	return nil
-}
-
-// normalizeDirectorIface maps API names (wgc5, ovpnc1, wan) to Merlin
-// VPN Director tokens (WGC5, OVPN1, WAN).
-func normalizeDirectorIface(iface string) string {
-	iface = strings.TrimSpace(iface)
-	if iface == "" {
-		return ""
-	}
-	up := strings.ToUpper(iface)
-	switch {
-	case up == "WAN":
-		return "WAN"
-	case strings.HasPrefix(up, "WGC"):
-		n := strings.TrimPrefix(up, "WGC")
-		if n != "" {
-			return "WGC" + n
-		}
-	case strings.HasPrefix(up, "OVPN"):
-		n := strings.TrimPrefix(strings.TrimPrefix(up, "OVPNC"), "OVPN")
-		if n != "" {
-			return "OVPN" + n
-		}
-	case strings.HasPrefix(strings.ToLower(iface), "ovpnc"):
-		n := strings.TrimPrefix(strings.ToLower(iface), "ovpnc")
-		if n != "" {
-			return "OVPN" + n
-		}
-	case strings.HasPrefix(strings.ToLower(iface), "wgc"):
-		n := strings.TrimPrefix(strings.ToLower(iface), "wgc")
-		if n != "" {
-			return "WGC" + n
-		}
-	}
-	return up
 }
 
 // parseVPNDirectorRuleList parses Merlin vpndirector_rulelist:
@@ -819,6 +782,7 @@ func parseVPNDirectorRuleList(raw string) []backend.PolicyRoute {
 			Enabled:     fields[0] == "1",
 			Description: fields[1],
 			Source:      fields[2],
+			Remote:      fields[3],
 			Interface:   fields[4],
 		})
 	}
@@ -835,7 +799,8 @@ func formatVPNDirectorRuleList(rs []backend.PolicyRoute) string {
 		b.WriteByte('>')
 		b.WriteString(r.Source)
 		b.WriteByte('>')
-		b.WriteByte('>') // empty remote IP
+		b.WriteString(r.Remote)
+		b.WriteByte('>')
 		b.WriteString(r.Interface)
 	}
 	return b.String()

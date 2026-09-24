@@ -3,6 +3,7 @@ package mock
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -284,38 +285,48 @@ func (b *Backend) PolicyRoutes(_ context.Context) ([]backend.PolicyRoute, error)
 func (b *Backend) SetPolicyRoute(_ context.Context, r backend.PolicyRoute) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if r.ID == "" && r.Source != "" {
-		src := strings.ToLower(strings.TrimSpace(r.Source))
-		for i := range b.policy {
-			if strings.ToLower(strings.TrimSpace(b.policy[i].Source)) == src {
-				r.ID = b.policy[i].ID
-				break
-			}
-		}
-	}
-	if r.ID != "" {
-		for i := range b.policy {
-			if b.policy[i].ID == r.ID {
-				b.policy[i] = r
-				return nil
-			}
-		}
-	}
 	if r.ID == "" {
-		r.ID = fmt.Sprintf("%d", len(b.policy)+1)
+		r.ID = strconv.Itoa(len(b.policy) + 1)
+		b.policy = append(b.policy, r)
+		return nil
 	}
-	b.policy = append(b.policy, r)
+	for i := range b.policy {
+		if b.policy[i].ID == r.ID {
+			b.policy[i] = r
+			return nil
+		}
+	}
+	return fmt.Errorf("mock: set policy route: no rule with id %q", r.ID)
+}
+
+func (b *Backend) ReplacePolicyRoutes(_ context.Context, routes []backend.PolicyRoute) error {
+	if err := backend.ValidatePolicyRoutes(routes); err != nil {
+		return fmt.Errorf("mock: %w", err)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.policy = make([]backend.PolicyRoute, len(routes))
+	copy(b.policy, routes)
+	for i := range b.policy {
+		b.policy[i].ID = strconv.Itoa(i + 1)
+	}
 	return nil
 }
 
 func (b *Backend) DeletePolicyRoute(_ context.Context, id string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	out := b.policy[:0]
+	out := make([]backend.PolicyRoute, 0, len(b.policy))
 	for _, r := range b.policy {
 		if r.ID != id {
 			out = append(out, r)
 		}
+	}
+	if len(out) == len(b.policy) {
+		return fmt.Errorf("mock: delete policy route: no rule with id %q", id)
+	}
+	for i := range out {
+		out[i].ID = strconv.Itoa(i + 1)
 	}
 	b.policy = out
 	return nil
