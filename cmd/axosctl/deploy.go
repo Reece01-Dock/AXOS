@@ -125,14 +125,18 @@ func buildComponents(outDir string, components []string, goos, goarch string) er
 
 // stageWebUI copies repo web/ static assets into staging/www/ (standalone
 // Phase 7 UI) and web/merlin/* into staging/merlin-ui/ (Merlin httpd embed,
-// hot-deployed via bind-mount — see scripts/router/axos-merlin-ui.sh).
+// hot-deployed via bind-mount — see scripts/router/axos-merlin-ui.sh). The
+// shared renderer web/axos-ui.js goes into both.
+// webUIFiles are the standalone UI's files; keep in sync with web/embed.go.
+var webUIFiles = []string{"index.html", "styles.css", "axos-ui.js"}
+
 func stageWebUI(outDir string) error {
 	wwwDir := filepath.Join(outDir, "www")
 	if err := os.MkdirAll(wwwDir, 0755); err != nil {
 		return err
 	}
 	repoWeb := filepath.Join("web")
-	for _, name := range []string{"index.html", "styles.css", "app.js"} {
+	for _, name := range webUIFiles {
 		src := filepath.Join(repoWeb, name)
 		data, err := os.ReadFile(src)
 		if err != nil {
@@ -166,6 +170,13 @@ func stageWebUI(outDir string) error {
 		if err := os.WriteFile(filepath.Join(merlinDir, name), data, 0644); err != nil {
 			return err
 		}
+	}
+	shared, err := os.ReadFile(filepath.Join(repoWeb, "axos-ui.js"))
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(merlinDir, "axos-ui.js"), shared, 0644); err != nil {
+		return err
 	}
 	fmt.Printf("    staged Merlin UI -> %s\n", merlinDir)
 	return nil

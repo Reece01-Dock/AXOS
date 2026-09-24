@@ -48,31 +48,26 @@ for the full design.
 
 ## Current status
 
-**Milestone 1 (build & flash proof) — not started on real hardware.** Nothing
-here has been flashed to a router yet. The firmware build scripts
-(`firmware/setup-sources.sh`, `firmware/build.sh`) are written but have not been
-run end-to-end on a build machine, and no image has been verified on a real
-GT-AX6000 — recovery mode must be tested first regardless (see
-`docs/flashing-and-recovery.md`).
+**Milestones 1–3 are done on a real GT-AX6000.** The router runs a
+source-built Asuswrt-Merlin image (build → flash → recover loop proven,
+recovery mode tested). `axosd` runs from JFFS with the `asuswrt` backend and
+serves the Core API, MCP and the web UIs; VPN (WireGuard/OpenVPN), VPN
+Director policy routing, DNS/DoT, DHCP reservations, firewall, QoS and
+diagnostics are all driven through it under the rollback safety net. Still
+open from those milestones: confirming both 2.5GbE ports, and an iperf3 peer
+for a full performance pass.
 
-**Milestone 2 (core service) — code complete and verified end-to-end against
-the mock/replay backends and real compiled binaries; untested against real
-hardware.** The whole module builds cleanly for the host and for
-`GOOS=linux GOARCH=arm64` (static binaries, no runtime dependencies), with
-99 automated tests passing. Beyond the unit tests, the actual compiled
-`axosd`/`axos-mcp`/`axosctl` binaries have been run against each other as
-real, separate OS processes and confirmed to: serve the Core API and answer
-router-status calls; run `axos-mcp` as a genuinely independent process
-against it (including proving an armed rollback transaction survives
-`axos-mcp` restarting — the whole reason the Core API exists); stage, deploy,
-and roll back real release directories with `axosctl`; and capture a
-sanitized fixture set from the mock backend with the Wi-Fi passphrase
-confirmed redacted on disk. The `asuswrt` backend
-(`internal/backend/asuswrt`) is implemented against documented
-Asuswrt-Merlin conventions, including an SSH transport for driving a remote
-router, but every hardware-specific assumption in it — nvram key names,
-interface naming, `wl`/`iptables`/`wg` output parsing — is marked
-`(verify)` and has not been checked against a real router.
+**Milestone 4 (optimisation loops)** exists only as tested skeletons in
+`internal/optimiser`; nothing tunes the router automatically yet.
+
+The UIs: **AXOS** tabs inside the stock Merlin web UI (VPN, LAN, WAN,
+Firewall, QoS, Wireless, Network Tools, Administration — see
+[`docs/merlin-ui.md`](docs/merlin-ui.md)) and a standalone page on `:9090`,
+both rendered by `web/axos-ui.js` in Merlin's own style. Check them with
+`scripts/ui-check/run.sh` (headless Chromium against the mock backend).
+
+Changes marked `[s]` in the roadmap are implemented and tested off-device but
+not yet re-verified on the router.
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the milestone checklists — that file
 is the source of truth for what is actually verified vs. merely written.

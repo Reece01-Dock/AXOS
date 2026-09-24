@@ -1,40 +1,87 @@
-/* AXOS Merlin control panel — stay close to stock form_style.css */
-#axos-root { margin: 0 0 12px; }
-.axos-toolbar {
-  margin: 0 0 10px 2px;
-  font-size: 12px;
+/*
+ * AXOS pages inside Merlin: everything visual comes from Merlin's own
+ * index_style.css / form_style.css. This file only adds the few pieces
+ * Merlin keeps in per-page <style> blocks or inline attributes.
+ */
+.FormTable.axos-block { margin-top: 8px; }
+
+/* Enable / disable icon (VPN Director uses the same SVGs as <img>). */
+.axos-state {
+	display: inline-block;
+	width: 25px;
+	height: 25px;
+	vertical-align: middle;
+	cursor: pointer;
+	background: url(/images/New_ui/disable.svg) no-repeat center / 25px 25px;
 }
-.axos-status { color: #ffcc66; font-family: Arial, Helvetica, sans-serif; font-size: 12px; margin-left: 10px; }
-.axos-status.ok { color: #7dffb3; }
-.axos-table { margin-bottom: 14px !important; }
-.axos-table.axos-hidden,
-[data-axos].axos-hidden { display: none !important; }
-.axos-pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 180px;
-  overflow: auto;
-  font-family: "Lucida Console", "Courier New", monospace;
-  font-size: 11px;
-  color: #dce6ea;
-  text-align: left;
+.axos-state.axos-on { background-image: url(/images/New_ui/enable.svg); }
+
+/* From Advanced_VPNDirector.asp */
+.addRuleFrame { margin-top: 18px; height: 35px; padding-left: 5px; }
+.addRuleText {
+	float: left;
+	height: 35px;
+	line-height: 35px;
+	font-weight: bolder;
+	font-family: Arial, Verdana, Arial, Helvetica, sans-serif;
+	font-size: 14px;
 }
-.hint { color: #FFCC00; font-size: 11px; margin-left: 8px; }
-.axos-actions input.button_gen { margin-right: 4px; }
-#axos-full-link { margin-left: 12px; color: #FFCC00; text-decoration: underline; font-size: 12px; }
-.axos-vpn-status {
-  margin: 0 0 12px 2px;
-  color: #FFF;
-  font-size: 12px;
-  line-height: 1.5;
+.addRuleFrame .add_btn { float: left; }
+
+/* Rule editor popup: same geometry as VPN Director's #rule_setting. */
+.axos-pop {
+	position: fixed;
+	top: 120px;
+	left: 50%;
+	margin-left: -300px;
+	border-radius: 6px;
+	z-index: 200;
+	display: none;
+	width: 600px;
+	box-shadow: 1px 5px 10px #000;
+	font-size: 12px;
+	color: #FFFFFF;
 }
-.axos-vpn-status p { margin: 0; }
-.axos-vpn-status b { color: #FC0; }
-/* FormTable_table body cells: left-align client names like Merlin lists */
-#axos-steer-body td:nth-child(2),
-#axos-policy-body td:nth-child(2),
-#axos-policy-body td:nth-child(3) {
-  text-align: left;
-  padding-left: 8px;
+.axos-pop-inner { padding: 15px; }
+.axos-pop-btns { margin-top: 15px; text-align: center; }
+
+.axos-note { margin: 6px 0 0 5px; font-size: 12px; color: #FFFFFF; }
+
+/* Network Tools log area (Main_Analysis_Content.asp inline style). */
+.axos-log {
+	width: 99%;
+	font-family: "Courier New", Courier, mono;
+	font-size: 11px;
+	background: #475A5F;
+	color: #FFFFFF;
+	margin-top: 8px;
 }
+.axos-paste {
+	width: 345px;
+	font-family: "Lucida Console", monospace;
+	font-size: 11px;
+	background: #596E74;
+	border: 1px solid #929EA1;
+	color: #FFFFFF;
+}
+
+.axos-bar {
+	display: inline-block;
+	width: 200px;
+	height: 10px;
+	vertical-align: middle;
+	background: #2F3A3E;
+	border: 1px solid #222;
+}
+.axos-bar div { height: 100%; width: 0; background: #FFCC00; }
+
+.axos-spin {
+	display: inline-block;
+	width: 32px;
+	height: 16px;
+	vertical-align: middle;
+	background: url(/images/InternetScan.gif) no-repeat center;
+}
+.axos-link { color: #FFCC00; text-decoration: underline; }
+input.button_gen.axos-small { height: 25px; font-size: 11px; }
+.axos-val { display: inline-block; color: #FFFFFF; }

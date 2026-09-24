@@ -6,7 +6,7 @@ import (
 )
 
 func TestEmbeddedAssetsPresent(t *testing.T) {
-	for _, name := range []string{"index.html", "styles.css", "app.js"} {
+	for _, name := range []string{"index.html", "styles.css", "axos-ui.js"} {
 		f, err := FS.Open(name)
 		if err != nil {
 			t.Fatalf("open %s: %v", name, err)

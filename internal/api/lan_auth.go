@@ -40,7 +40,7 @@ func (a *LANAuth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isLoopbackRequest(r) {
+	if !isLoopbackRequest(r) && !isStaticUIRequest(r) {
 		tok, ok := a.loadToken()
 		if !ok || tok == "" {
 			http.Error(w, `{"error":"lan api disabled (no ui token)"}`, http.StatusForbidden)
@@ -68,6 +68,16 @@ func (a *LANAuth) loadToken() (string, bool) {
 	}
 	tok := strings.TrimSpace(string(data))
 	return tok, tok != ""
+}
+
+// isStaticUIRequest lets a LAN browser load the standalone UI's static
+// files (GET / and /ui/*) without the token: they carry no router data, and
+// the page itself then asks for the token before calling /v1/*.
+func isStaticUIRequest(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	return r.URL.Path == "/" || strings.HasPrefix(r.URL.Path, "/ui/")
 }
 
 func isLoopbackRequest(r *http.Request) bool {

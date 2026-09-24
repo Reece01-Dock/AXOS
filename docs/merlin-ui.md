@@ -5,26 +5,39 @@ already live — not only under Administration:
 
 | Merlin menu | AXOS focus | Overlay page (basename) |
 |---|---|---|
-| **VPN** | profiles, client→tunnel routing / groups, Director, endpoint ping | `Advanced_VPN_PPTP.asp` |
-| **LAN** | DHCP reservations + clients | `Advanced_APPList_Content.asp` |
-| **WAN** | DNS upstreams / DoT | `WAN_info.asp` |
-| **Firewall** | filter preview | `Advanced_VPN_IPSec.asp` |
-| **Adaptive QoS** | QoS toggle | `Advanced_AiDisk_webdav.asp` |
-| **Wireless** | radios + clients | `WiFi_Insight.asp` |
-| **Network Tools** | diagnostics | `Guest_network.asp` |
-| **Administration** | full control panel | `Main_GameServer_Content.asp` |
+| **VPN** | VPN client status + connect, route LAN clients to a tunnel / WAN, client groups, staged VPN Director rule editor, WireGuard import (incl. `.conf`), endpoint latency | `Advanced_VPN_PPTP.asp` |
+| **LAN** | DHCP reservations (pick a client or type), client list with one-click reserve | `Advanced_APPList_Content.asp` |
+| **WAN** | WAN DNS (auto/manual), DNS-over-TLS servers + presets, LAN DNS, WAN status, lookup test | `WAN_info.asp` |
+| **Firewall** | live iptables rules (filter/search), add / delete | `Advanced_VPN_IPSec.asp` |
+| **Adaptive QoS** | QoS on/off, bandwidth, live throughput | `Advanced_AiDisk_webdav.asp` |
+| **Wireless** | radios, wireless clients by signal | `WiFi_Insight.asp` |
+| **Network Tools** | ping, traceroute, nslookup, port check, iperf3 | `Guest_network.asp` |
+| **Administration** | overview: AXOS status, rollback, system, interfaces, services, backups/restore | `Main_GameServer_Content.asp` |
 
 (After **Firmware Upgrade** in the Administration tab strip.)
 
 Each overlay is an unused stock ASP bind-mounted from JFFS. Merlin’s menu code
 matches **basenames** only, so every panel needs its own `/www/*.asp` name.
 
-## Control panel
+## UI code
 
-Shared FormTable UI (`web/merlin/Axos_Content.asp` + `axos-embed.js`), filtered
-by `window.AXOS_SECTION`. Mutating actions use rollback arm/confirm.
+One renderer, two frontends: `web/axos-ui.js` builds every section with
+Merlin's own markup (`FormTable`, `FormTable_table` + `list_table`,
+`add_btn`/`remove_btn`/`edit_btn`, `apply_gen`, Yes/No radios), so inside
+Merlin it is styled entirely by the stock `form_style.css`
+(`web/merlin/axos-embed.css` only adds what Merlin keeps in per-page
+`<style>` blocks). The standalone page on `:9090` (`web/index.html`) uses
+the same renderer with `web/styles.css`, a copy of the Merlin look.
 
-Focused panels link back to the full Administration AXOS page.
+Every change is wrapped in a 2-minute safety rollback (arm → change →
+confirm; a failed change is left armed so the router restores itself).
+VPN Director edits are staged like Merlin's page and written in one Apply.
+
+Test both UIs in headless Chromium against the mock backend:
+
+```sh
+scripts/ui-check/run.sh [screenshot-dir]
+```
 
 ## How it works
 
@@ -58,7 +71,8 @@ and log back in** (or private window), then hard-refresh.
 ## Day-to-day workflow
 
 ```sh
-# edit web/merlin/Axos_Content.asp (or axos-embed.js / .css)
+# edit web/axos-ui.js (or web/merlin/Axos_Content.asp / axos-embed.css)
+scripts/ui-check/run.sh
 ./scripts/deploy-router.sh Reece@192.168.50.1
 # or hot-copy + re-run inject:
 #   cat web/merlin/Axos_Content.asp | ssh router 'cat > /jffs/axos/merlin-ui/Axos_Content.asp'

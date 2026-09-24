@@ -1,62 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AXOS</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/ui/styles.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=1024">
+<title>AXOS</title>
+<link rel="stylesheet" href="/ui/styles.css">
+<script>
+window.AXOS_EMBED = "standalone";
+window.AXOS_API_BASE = "";
+</script>
+<script src="/ui/axos-ui.js"></script>
 </head>
-<body>
-  <div class="atmosphere" aria-hidden="true"></div>
-  <header class="hero">
-    <p class="brand">AXOS</p>
-    <h1 class="tagline">Router control, one plane.</h1>
-    <p class="lede">Live view of the Core API this UI shares with MCP and CLI.</p>
-    <div class="cta">
-      <button type="button" id="btn-refresh" class="btn primary">Refresh</button>
-      <a class="btn ghost" href="/healthz" target="_blank" rel="noopener">healthz</a>
-    </div>
-  </header>
+<body class="bg">
+<div id="TopBanner">
+	<div class="axos-banner">
+		<div class="axos-logo">AXOS</div>
+		<div class="axos-banner-info">
+			<span>Model: <b id="banner-model">-</b></span>
+			<span>Firmware: <b id="banner-fw">-</b></span>
+			<span>Core API: <b id="banner-api">-</b></span>
+		</div>
+	</div>
+</div>
 
-  <main class="console" id="console">
-    <section class="panel" aria-labelledby="sys-heading">
-      <h2 id="sys-heading">System</h2>
-      <pre id="sys-body" class="data">Loading…</pre>
-    </section>
-    <section class="panel" aria-labelledby="res-heading">
-      <h2 id="res-heading">Resources</h2>
-      <pre id="res-body" class="data">Loading…</pre>
-    </section>
-    <section class="panel" aria-labelledby="net-heading">
-      <h2 id="net-heading">Network</h2>
-      <pre id="net-body" class="data">Loading…</pre>
-    </section>
-    <section class="panel" aria-labelledby="wifi-heading">
-      <h2 id="wifi-heading">Wi-Fi</h2>
-      <pre id="wifi-body" class="data">Loading…</pre>
-    </section>
-    <section class="panel" aria-labelledby="vpn-heading">
-      <h2 id="vpn-heading">VPN</h2>
-      <pre id="vpn-body" class="data">Loading…</pre>
-    </section>
-    <section class="panel" aria-labelledby="diag-heading">
-      <h2 id="diag-heading">Diagnostics</h2>
-      <form id="diag-form" class="diag-form">
-        <label>Host <input name="host" value="1.1.1.1" autocomplete="off" /></label>
-        <button type="submit" class="btn primary">Ping</button>
-      </form>
-      <pre id="diag-body" class="data">—</pre>
-    </section>
-  </main>
-
-  <footer class="foot">
-    <span id="status">connecting</span>
-    <span class="sep">·</span>
-    <span>same Core API as MCP</span>
-  </footer>
-  <script src="/ui/app.js"></script>
+<table class="content" align="center" cellpadding="0" cellspacing="0">
+	<tr>
+		<td width="17">&nbsp;</td>
+		<td valign="top" width="202">
+			<div id="mainMenu">
+				<div class="menu_Split">AXOS</div>
+				<a class="menu" href="#all"><div class="menu_Desc">Overview</div></a>
+				<div class="menu_Split">Advanced Settings</div>
+				<a class="menu" href="#vpn"><div class="menu_Desc">VPN</div></a>
+				<a class="menu" href="#lan"><div class="menu_Desc">LAN</div></a>
+				<a class="menu" href="#dns"><div class="menu_Desc">WAN</div></a>
+				<a class="menu" href="#firewall"><div class="menu_Desc">Firewall</div></a>
+				<a class="menu" href="#qos"><div class="menu_Desc">Adaptive QoS</div></a>
+				<a class="menu" href="#wifi"><div class="menu_Desc">Wireless</div></a>
+				<a class="menu" href="#diag"><div class="menu_Desc">Network Tools</div></a>
+			</div>
+		</td>
+		<td valign="top">
+			<div id="tabMenu" class="submenuBlock"><div class="tabClicked"><span>AXOS</span></div></div>
+			<table width="98%" border="0" align="left" cellpadding="0" cellspacing="0">
+				<tr>
+					<td valign="top">
+						<table width="760px" border="0" cellpadding="4" cellspacing="0" class="FormTitle" id="FormTitle">
+							<tbody>
+							<tr>
+								<td bgcolor="#4D595D" valign="top">
+									<div>&nbsp;</div>
+									<div class="formfonttitle" id="axos-title">AXOS</div>
+									<div style="margin:10px 0 10px 5px;" class="splitLine"></div>
+									<div class="formfontdesc" id="axos-desc"></div>
+									<div class="formfontdesc hint-color" id="axos-conn" style="display:none"></div>
+									<div id="axos-root"></div>
+								</td>
+							</tr>
+							</tbody>
+						</table>
+					</td>
+				</tr>
+			</table>
+		</td>
+		<td width="10" align="center" valign="top">&nbsp;</td>
+	</tr>
+</table>
+<div id="footer">AXOS &middot; same Core API as the Merlin AXOS tabs, MCP and axosctl</div>
+<script>
+// Highlight the current menu entry and fill the banner.
+window.axosOnSection = function (id) {
+	var links = document.querySelectorAll("#mainMenu a.menu");
+	for (var i = 0; i < links.length; i++) {
+		links[i].className = links[i].getAttribute("href") === "#" + id ? "menu menu_clicked" : "menu";
+	}
+};
+AXOS.init();
+(function banner() {
+	var headers = { Accept: "application/json" };
+	try { var t = localStorage.getItem("axos-ui-token"); if (t) headers["X-Axos-UI-Token"] = t; } catch (e) {}
+	fetch("/v1/info", { headers: headers }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+		.then(function (i) {
+			document.getElementById("banner-model").textContent = i.model || "-";
+			document.getElementById("banner-fw").textContent = i.firmware_version || "-";
+			document.getElementById("banner-api").textContent = "Connected";
+		}, function () {
+			document.getElementById("banner-api").textContent = "Not connected";
+		});
+})();
+</script>
 </body>
 </html>

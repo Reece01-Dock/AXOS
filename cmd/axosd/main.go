@@ -76,7 +76,7 @@ Common flags:
   -api-addr string        Address the Core API listens on (default "127.0.0.1:9090" —
                            see docs/security.md before widening this)
   -ui-dir string          Directory of web UI static assets (index.html, styles.css,
-                            app.js). If set and the directory exists, serve from disk
+                            axos-ui.js). If set and the directory exists, serve from disk
                             (hot-deploy under <axos-root>/www/). Otherwise use the
                             assets embedded in this binary.
   -ui-token-file string   Non-loopback API clients must send X-Axos-UI-Token

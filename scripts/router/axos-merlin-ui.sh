@@ -69,22 +69,22 @@ gen_page() {
 }
 
 if [ -f "$TEMPLATE" ]; then
-  gen_page "Main_GameServer_Content.asp" "all" "Control" \
-    "Full AXOS control panel (Administration)."
+  gen_page "Main_GameServer_Content.asp" "all" "Overview" \
+    "AXOS status, system, interfaces and backups."
   gen_page "Advanced_VPN_PPTP.asp" "vpn" "VPN" \
-    "Route LAN clients through a VPN tunnel (same engine as Merlin VPN Director). Pick an interface, tick clients, then Apply. Optional groups remember a set of devices."
+    "Route LAN clients through VPN tunnels (VPN Director), import WireGuard, test endpoints."
   gen_page "Advanced_APPList_Content.asp" "lan" "LAN" \
-    "AXOS DHCP reservations and clients — next to Merlin LAN/DHCP."
+    "DHCP reservations and LAN clients."
   gen_page "WAN_info.asp" "dns" "DNS" \
-    "AXOS DNS upstreams / DoT — under WAN alongside Merlin DNS tools."
+    "WAN and LAN DNS servers, DNS-over-TLS."
   gen_page "Advanced_VPN_IPSec.asp" "firewall" "Firewall" \
-    "AXOS firewall preview — next to Merlin Firewall."
+    "Live iptables rules."
   gen_page "Advanced_AiDisk_webdav.asp" "qos" "QoS" \
-    "AXOS QoS toggle — under Adaptive QoS / Bandwidth Monitor."
+    "QoS on/off and live throughput."
   gen_page "WiFi_Insight.asp" "wifi" "Wi-Fi" \
-    "AXOS radios and clients — next to Merlin Wireless."
+    "Radios and wireless client signal."
   gen_page "Guest_network.asp" "diag" "Tools" \
-    "AXOS diagnostics — under Network Tools."
+    "Ping, traceroute, nslookup, port check, iperf3."
 fi
 
 # --- Patch menuTree: AXOS tab in each relevant Merlin section ----------------

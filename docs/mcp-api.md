@@ -65,9 +65,17 @@ Status: ✅ implemented in axosd (mock-tested, hardware-unverified) ·
 
 | Tool | Status | Notes |
 |---|---|---|
-| `route.policy.list` | ✅ | device → WAN/VPN steering |
-| `route.policy.set` | ✅ | **[danger]** |
+| `route.policy.list` | ✅ | device → WAN/VPN steering (VPN Director rules: `source` = Local IP/CIDR, optional `remote`) |
+| `route.policy.set` | ✅ | **[danger]** update by `id`, or add; adding for a device that already has a rule is refused unless `replace=true`. A MAC `source` resolves to the client's current IP |
+| `route.policy.bulk` | ✅ | **[danger]** steer many devices (IP/CIDR/MAC) to one interface in a single apply (one `restart_vpnrouting0`); conflicts refused unless `replace=true` |
+| `route.policy.remove` | ✅ | **[danger]** drop every rule for the given devices in a single apply |
 | `route.policy.delete` | ✅ | **[danger]** |
+
+Core API equivalents: `GET|POST|PUT /v1/policy` (PUT replaces the whole
+list), `POST /v1/policy/bulk` (409 + `conflicts` when a rule would be
+overwritten without `replace`), `POST /v1/policy/bulk/remove`,
+`DELETE /v1/policy/{id}`; client groups `GET|PUT /v1/vpn/client-groups`
+and `POST /v1/vpn/client-groups/{id}/apply`.
 
 ### Firewall / DNS / DHCP / QoS (Milestone 3)
 

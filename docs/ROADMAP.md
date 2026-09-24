@@ -527,6 +527,12 @@ Detailed status of the phases behind Milestone 2 — see
       `GET|POST /v1/policy` + `DELETE /v1/policy/{id}` (round-trip verified)
 - [x] Bypass rules (device stays on WAN) — policy route with
       `interface=wan` (same API)
+- [s] Policy writes are atomic and conflict-safe — bulk changes are one
+      `ReplacePolicyRoutes` (one nvram commit + one `restart_vpnrouting0`),
+      rules are IP/CIDR only (MACs resolve to the client's current IP; VPN
+      Director cannot match a MAC), the rule's remote field survives
+      rewrites, and overwriting an existing rule needs `replace=true`.
+      Sandbox + browser-tested (`scripts/ui-check`); re-verify on hardware
 - [x] VPN endpoint latency benchmarking + automatic endpoint selection —
       `POST /v1/vpn/benchmark` + MCP `vpn.benchmark_endpoints` rank hosts by
       ping (verified in sandbox + Merlin UI); **auto-apply to a profile** still
@@ -539,6 +545,12 @@ Detailed status of the phases behind Milestone 2 — see
       custom-chain round-trip verified under rollback
 - [x] QoS inspection and control — `GET|POST /v1/qos` (`qos_enable`
       toggle verified)
+- [s] DNS / DHCP / QoS changes are applied the way Merlin's own pages do —
+      WAN DNS now writes the persistent `wan0_dns{enable,1,2}_x` keys (not
+      runtime `wan0_dns`) then `restart_wan_if 0`; LAN-DNS-only changes and
+      DHCP reservations `restart_dnsmasq`; QoS `restart_qos` +
+      `restart_firewall`. Unit-tested against a fake runner; re-verify on
+      hardware
 - [x] Diagnostics — ping / DNS lookup / port check verified on-router;
       traceroute wired (`traceroute -m N`)
 - [s] Performance testing — `POST /v1/perf/iperf3` implemented; needs a
@@ -566,6 +578,15 @@ KEEP OR REVERT → CONTINUE. No unbenchmarked "tuning".
 
 - [x] AXOS web UI (Phase 7) — thin Core API client at `/` (same backend as
       MCP/CLI).
+- [s] Both UIs rebuilt on one renderer (`web/axos-ui.js`) using Merlin's own
+      markup (FormTable / list_table / add/remove/edit buttons / Apply) —
+      the standalone `:9090` page carries a copy of the Merlin look and now
+      loads over the LAN (static files exempt from the token; the page asks
+      for it). New: staged VPN Director editor, conflict prompts, WireGuard
+      `.conf` import, DoT server list, LAN client list with one-click
+      reservations, firewall add/delete, live throughput, Wi-Fi signal,
+      iperf3, backups/restore, rollback status. Verified in Chromium against
+      the mock backend by `scripts/ui-check/run.sh`; not yet on the router
 - [x] Custom AXOS sections inside the stock ASUS httpd UI — **AXOS** tabs in
       Merlin **VPN / LAN / WAN / Firewall / QoS / Wireless / Network Tools /
       Administration** (after Firmware Upgrade) via JFFS bind-mount

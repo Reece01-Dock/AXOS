@@ -71,3 +71,33 @@ func TestLANAuth_LANRequiresToken(t *testing.T) {
 		}
 	}
 }
+
+func TestLANAuth_StaticUIWithoutToken(t *testing.T) {
+	dir := t.TempDir()
+	tokenFile := filepath.Join(dir, "ui.token")
+	if err := os.WriteFile(tokenFile, []byte("secret-token\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := &LANAuth{Inner: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), TokenFile: tokenFile}
+	cases := []struct {
+		method, path string
+		want         int
+	}{
+		{http.MethodGet, "/", http.StatusOK},
+		{http.MethodGet, "/ui/axos-ui.js", http.StatusOK},
+		{http.MethodPost, "/ui/axos-ui.js", http.StatusUnauthorized},
+		{http.MethodGet, "/v1/info", http.StatusUnauthorized},
+		{http.MethodGet, "/v1/nvram", http.StatusUnauthorized},
+	}
+	for _, c := range cases {
+		req := httptest.NewRequest(c.method, c.path, nil)
+		req.RemoteAddr = "192.168.50.10:9999"
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != c.want {
+			t.Errorf("%s %s = %d, want %d", c.method, c.path, rr.Code, c.want)
+		}
+	}
+}

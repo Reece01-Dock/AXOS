@@ -70,6 +70,8 @@ fi
 if [ -d "\$ROOT/current/www" ]; then
   cp -a "\$ROOT/current/www/." "\$ROOT/www/"
 fi
+# Files replaced by the shared web/axos-ui.js renderer.
+rm -f "\$ROOT/merlin-ui/axos-embed.js" "\$ROOT/www/app.js"
 # Helper scripts always from the repo copy pushed beside this script? Prefer
 # keeping them under bin/ from the host deploy (see below).
 df -h /jffs | tail -1
